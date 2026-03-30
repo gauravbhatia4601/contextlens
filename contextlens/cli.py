@@ -1,5 +1,4 @@
-"""
-CLI entry point for ContextLens.
+"""CLI entry point for ContextLens.
 
 Commands:
 - scan: Profile KV cache memory usage and context limits
@@ -10,6 +9,8 @@ Commands:
 """
 
 from __future__ import annotations
+
+import time
 
 from typing import Optional
 
