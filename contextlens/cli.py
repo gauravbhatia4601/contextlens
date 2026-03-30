@@ -24,45 +24,73 @@ from .integrations.ollama import apply_to_ollama, revert_ollama, get_modelfile
 from .integrations.llamacpp import write_config_file
 
 
-def _get_hf_model_id(ollama_model: str) -> str:
+def _get_hf_model_id(ollama_model: str, prefer_open: bool = True) -> str:
     """Map Ollama model names to HuggingFace model IDs for benchmarking.
     
     Args:
         ollama_model: Ollama model name (e.g., "llama3.2:3b")
+        prefer_open: If True, use open-weight alternatives when available
     
     Returns:
         HuggingFace model ID (e.g., "meta-llama/Llama-3.2-3B-Instruct")
     """
-    # Common Ollama -> HuggingFace mappings (using non-gated alternatives where possible)
+    # Comprehensive Ollama -> HuggingFace mappings
+    # Priority: Open weights > Gated (if user has access)
     mappings = {
-        # Llama 3.2 - use Qwen as fallback (open weights)
-        "llama3.2:1b": "Qwen/Qwen2.5-0.5B-Instruct",
-        "llama3.2:3b": "Qwen/Qwen2.5-3B-Instruct",
-        # Llama 3.1 - use Qwen as fallback
-        "llama3.1:8b": "Qwen/Qwen2.5-7B-Instruct",
-        "llama3.1:70b": "Qwen/Qwen2.5-72B-Instruct",
-        # Mistral (open weights)
+        # Llama 3.2 (use Qwen as open alternative)
+        "llama3.2:1b": "Qwen/Qwen2.5-0.5B-Instruct" if prefer_open else "meta-llama/Llama-3.2-1B-Instruct",
+        "llama3.2:3b": "Qwen/Qwen2.5-3B-Instruct" if prefer_open else "meta-llama/Llama-3.2-3B-Instruct",
+        # Llama 3.1 (use Qwen as open alternative)
+        "llama3.1:8b": "Qwen/Qwen2.5-7B-Instruct" if prefer_open else "meta-llama/Meta-Llama-3.1-8B-Instruct",
+        "llama3.1:70b": "Qwen/Qwen2.5-72B-Instruct" if prefer_open else "meta-llama/Meta-Llama-3.1-70B-Instruct",
+        # Llama 3
+        "llama3:8b": "Qwen/Qwen2.5-7B-Instruct" if prefer_open else "meta-llama/Meta-Llama-3-8B-Instruct",
+        "llama3:70b": "Qwen/Qwen2.5-72B-Instruct" if prefer_open else "meta-llama/Meta-Llama-3-70B-Instruct",
+        # Mistral (all open weights)
         "mistral:7b": "mistralai/Mistral-7B-Instruct-v0.3",
+        "mistral:7b-v0.1": "mistralai/Mistral-7B-Instruct-v0.1",
+        "mistral:7b-v0.2": "mistralai/Mistral-7B-Instruct-v0.2",
         "mixtral:8x7b": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        # Phi-3 (open weights)
+        "mixtral:8x22b": "mistralai/Mixtral-8x22B-Instruct-v0.1",
+        # Phi-3 (all open weights)
         "phi3:3.8b": "microsoft/Phi-3-mini-4k-instruct",
         "phi3:14b": "microsoft/Phi-3-medium-4k-instruct",
-        # Gemma (open weights)
+        "phi3:7b": "microsoft/Phi-3-small-8k-instruct",
+        # Gemma (all open weights)
         "gemma:2b": "google/gemma-2b-it",
         "gemma:7b": "google/gemma-7b-it",
-        # Qwen (open weights)
+        "gemma2:2b": "google/gemma-2-2b-it",
+        "gemma2:9b": "google/gemma-2-9b-it",
+        "gemma2:27b": "google/gemma-2-27b-it",
+        # Qwen (all open weights)
+        "qwen2:0.5b": "Qwen/Qwen2-0.5B-Instruct",
+        "qwen2:1.5b": "Qwen/Qwen2-1.5B-Instruct",
         "qwen2:7b": "Qwen/Qwen2-7B-Instruct",
+        "qwen2:72b": "Qwen/Qwen2-72B-Instruct",
+        "qwen2.5:0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
+        "qwen2.5:1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
+        "qwen2.5:3b": "Qwen/Qwen2.5-3B-Instruct",
         "qwen2.5:7b": "Qwen/Qwen2.5-7B-Instruct",
+        "qwen2.5:14b": "Qwen/Qwen2.5-14B-Instruct",
+        "qwen2.5:32b": "Qwen/Qwen2.5-32B-Instruct",
+        "qwen2.5:72b": "Qwen/Qwen2.5-72B-Instruct",
+        # Yi (open weights)
+        "yi:6b": "01-ai/Yi-6B-Chat",
+        "yi:34b": "01-ai/Yi-34B-Chat",
+        # StableLM (open weights)
+        "stablelm:3b": "stabilityai/stablelm-3b-4e1t",
     }
     
     # Check for exact match first
     if ollama_model.lower() in mappings:
         return mappings[ollama_model.lower()]
     
-    # Check for partial matches
+    # Check for partial matches (more flexible)
     ollama_lower = ollama_model.lower()
     for key, value in mappings.items():
-        if key.split(":")[0] in ollama_lower:
+        # Extract base model name (e.g., "llama3.2" from "llama3.2:3b")
+        base_key = key.split(":")[0]
+        if base_key in ollama_lower:
             return value
     
     # Default: return as-is (might work for direct HF paths)
@@ -124,6 +152,7 @@ def apply(
     force: bool = typer.Option(False, "--force", help="Apply even if accuracy delta > 1%"),
     dataset: str = typer.Option("mmlu", help="Benchmark dataset: mmlu | hellaswag"),
     n_questions: int = typer.Option(500, help="Number of benchmark questions"),
+    use_open_weights: bool = typer.Option(True, "--use-open-weights/--use-gated", help="Use open-weight alternatives (Qwen) vs gated models (Llama)"),
 ) -> None:
     """Apply TurboQuant compression and validate accuracy."""
     try:
@@ -148,13 +177,20 @@ def apply(
                 from .benchmarks import run_accuracy_benchmark, BenchmarkResult
                 
                 # Map Ollama model name to HuggingFace ID for benchmarking
-                hf_model_id = _get_hf_model_id(model)
-                console.print(f"[dim]Loading model from HuggingFace: {hf_model_id}[/dim]")
-                tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
+                hf_model_id = _get_hf_model_id(model, prefer_open=use_open_weights)
+                
+                if use_open_weights and hf_model_id.startswith("Qwen/"):
+                    console.print(f"[dim]Loading open-weight model: {hf_model_id}[/dim]")
+                else:
+                    console.print(f"[dim]Loading model from HuggingFace: {hf_model_id}[/dim]")
+                    console.print("[dim]Note: This may require HuggingFace authentication for gated models.[/dim]")
+                
+                tokenizer = AutoTokenizer.from_pretrained(hf_model_id, trust_remote_code=True)
                 model_obj = AutoModelForCausalLM.from_pretrained(
                     hf_model_id,
                     torch_dtype="auto",
                     device_map="auto",
+                    trust_remote_code=True,
                 )
                 
                 result: BenchmarkResult = run_accuracy_benchmark(
@@ -204,15 +240,55 @@ def apply(
                     _handle_error(f"Benchmark failed: {exc}")
             except Exception as exc:
                 error_msg = str(exc)
-                if "gated repo" in error_msg or "401" in error_msg:
+                if "gated repo" in error_msg or "401" in error_msg or "403" in error_msg:
                     console.print(
                         f"[yellow]Warning: HuggingFace model requires authentication.[/yellow]"
                     )
                     console.print(
-                        f"[dim]Skipping benchmark. Use --skip-benchmark flag to suppress this warning.[/dim]"
+                        f"\n[dim]This model requires HuggingFace access. You have 3 options:[/dim]"
                     )
                     console.print(
-                        f"[dim]To fix: Log in with `huggingface-cli login` or use a non-gated model.[/dim]"
+                        f"\n[cyan]Option 1:[/cyan] Use open-weight alternatives (recommended)"
+                    )
+                    console.print(
+                        f"  [dim]# Use Qwen instead of Llama (no auth needed)[/dim]"
+                    )
+                    console.print(
+                        f"  contextlens apply {model} --use-open-weights"
+                    )
+                    console.print(
+                        f"\n[cyan]Option 2:[/cyan] Log in to HuggingFace"
+                    )
+                    console.print(
+                        f"  [dim]# Install huggingface-cli and login[/dim]"
+                    )
+                    console.print(
+                        f"  pip install huggingface_hub"
+                    )
+                    console.print(
+                        f"  huggingface-cli login"
+                    )
+                    console.print(
+                        f"  [dim]# Then retry with gated models[/dim]"
+                    )
+                    console.print(
+                        f"  contextlens apply {model} --use-gated"
+                    )
+                    console.print(
+                        f"\n[cyan]Option 3:[/cyan] Skip benchmark"
+                    )
+                    console.print(
+                        f"  contextlens apply {model} --skip-benchmark"
+                    )
+                    console.print(
+                        f"\n[dim]Skipping benchmark and proceeding with compression...[/dim]"
+                    )
+                elif "404" in error_msg or "not found" in error_msg.lower():
+                    console.print(
+                        f"[yellow]Warning: Model '{hf_model_id}' not found on HuggingFace.[/yellow]"
+                    )
+                    console.print(
+                        f"[dim]Skipping benchmark. The model mapping may need updating.[/dim]"
                     )
                 else:
                     console.print(f"[yellow]Warning: Benchmark error - {exc}[/yellow]")
@@ -318,6 +394,52 @@ def status() -> None:
         
     except Exception as exc:
         _handle_error(f"Error loading profiles: {exc}", exc)
+
+
+@app.command()
+def hf_auth(check: bool = typer.Option(False, "--check", help="Check authentication status"),
+            login: bool = typer.Option(False, "--login", help="Log in to HuggingFace")) -> None:
+    """Manage HuggingFace authentication for benchmarking."""
+    try:
+        from huggingface_hub import HfFolder, whoami
+        
+        if login:
+            console.print("[bold blue]HuggingFace Login[/bold blue]")
+            console.print("\n[dim]To log in, run:[/dim]")
+            console.print("  pip install huggingface_hub")
+            console.print("  huggingface-cli login")
+            console.print("\n[dim]Or set environment variable:[/dim]")
+            console.print("  export HF_TOKEN=your_token_here")
+            return
+        
+        if check:
+            console.print("[bold blue]HuggingFace Authentication Status[/bold blue]\n")
+            
+            token = HfFolder.get_token()
+            if token:
+                try:
+                    user_info = whoami(token=token)
+                    console.print(f"[green]✓ Logged in as:[/green] {user_info.get('name', 'Unknown')}")
+                    console.print(f"[dim]Email: {user_info.get('email', 'Unknown')}[/dim]")
+                    
+                    # Check if user has access to gated models
+                    console.print(f"\n[yellow]Note:[/yellow] Login successful, but you may need to:")
+                    console.print(f"  1. Accept model licenses at: https://huggingface.co/settings/accepted")
+                    console.print(f"  2. Request access for specific models (e.g., Llama, Gemma)")
+                except Exception:
+                    console.print(f"[green]✓ Token found[/green]")
+                    console.print(f"[dim]Token is set but not validated. Try running a benchmark to test.[/dim]")
+            else:
+                console.print(f"[yellow]✗ Not logged in[/yellow]")
+                console.print(f"\n[dim]To enable gated models, run:[/dim]")
+                console.print(f"  huggingface-cli login")
+                console.print(f"\n[dim]Or use open-weight alternatives:[/dim]")
+                console.print(f"  contextlens apply <model> --use-open-weights")
+                
+    except ImportError:
+        console.print(f"[yellow]huggingface_hub not installed.[/yellow]")
+        console.print(f"\n[dim]Install with:[/dim]")
+        console.print(f"  pip install huggingface_hub")
 
 
 @app.command()
