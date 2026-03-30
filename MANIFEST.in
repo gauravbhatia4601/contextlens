@@ -1,0 +1,15 @@
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+include pyproject.toml
+recursive-include contextlens *.py
+recursive-include tests *.py
+exclude .git/*
+exclude __pycache__/*
+exclude *.pyc
+exclude *.pyo
+exclude .pytest_cache/*
+exclude .mypy_cache/*
+exclude dist/*
+exclude build/*
+exclude *.egg-info/*
