@@ -471,3 +471,117 @@ def revert(model: str = typer.Argument(..., help="Model name to revert compressi
 
 if __name__ == "__main__":
     app()
+
+
+@app.command()
+def compare(
+    original_model: str = typer.Argument(..., help="Original model name (e.g., llama3.2:3b)"),
+    compressed_model: str = typer.Argument(None, help="Compressed model name (default: <original>-contextlens)"),
+    prompt: str = typer.Option("Write a short story about AI.", "-p", "--prompt", help="Prompt for inference"),
+    prompt_file: str = typer.Option(None, "-f", "--file", help="Read prompt from file"),
+    container: str = typer.Option(None, "-c", "--container", help="Docker container name (optional)"),
+    timeout: int = typer.Option(120, "-t", "--timeout", help="Timeout in seconds"),
+    iterations: int = typer.Option(1, "-n", "--iterations", help="Number of test iterations"),
+) -> None:
+    """Compare original vs compressed model performance in real-time."""
+    try:
+        from .compare import compare_models, ModelMetrics, run_inference, display_comparison, calculate_kv_cache
+        from rich.panel import Panel
+        from rich import box
+        
+        # Determine compressed model name
+        if not compressed_model:
+            compressed_model = f"{original_model}-contextlens"
+        
+        # Get prompt from file if specified
+        if prompt_file:
+            try:
+                with open(prompt_file, 'r') as f:
+                    prompt = f.read().strip()
+            except FileNotFoundError:
+                _handle_error(f"Prompt file not found: {prompt_file}")
+        
+        console.print(Panel.fit(
+            f"[bold cyan]ContextLens Comparison Test[/bold cyan]\n\n"
+            f"[yellow]Original:[/] {original_model}\n"
+            f"[green]Compressed:[/] {compressed_model}\n"
+            f"[dim]Prompt:[/] {len(prompt)} chars\n"
+            f"[dim]Iterations:[/] {iterations}",
+            title="Test Configuration",
+            border_style="cyan"
+        ))
+        
+        if iterations == 1:
+            # Single comparison
+            compare_models(
+                original_model=original_model,
+                compressed_model=compressed_model,
+                prompt=prompt,
+                container_name=container,
+                timeout=timeout
+            )
+        else:
+            # Multiple iterations for averaging
+            console.print(f"\n[bold blue]Running {iterations} iterations...[/bold blue]\n")
+            
+            original_metrics = []
+            compressed_metrics = []
+            
+            for i in range(iterations):
+                console.print(f"\n[dim]━━━ Iteration {i+1}/{iterations} ━━━[/dim]\n")
+                
+                # Test original
+                console.print(f"[yellow]Testing {original_model}...[/yellow]")
+                orig = run_inference(original_model, prompt, container, timeout)
+                if orig.success:
+                    original_metrics.append(orig)
+                    console.print(f"  ✓ {orig.total_tokens} tokens in {orig.inference_time:.2f}s ({orig.tokens_per_second:.1f} tok/s)")
+                else:
+                    console.print(f"  ❌ {orig.error}")
+                
+                # Test compressed
+                console.print(f"[green]Testing {compressed_model}...[/green]")
+                comp = run_inference(compressed_model, prompt, container, timeout)
+                if comp.success:
+                    compressed_metrics.append(comp)
+                    console.print(f"  ✓ {comp.total_tokens} tokens in {comp.inference_time:.2f}s ({comp.tokens_per_second:.1f} tok/s)")
+                else:
+                    console.print(f"  ❌ {comp.error}")
+                
+                # Small delay between iterations
+                if i < iterations - 1:
+                    time.sleep(2)
+            
+            # Calculate averages
+            if original_metrics and compressed_metrics:
+                avg_original = ModelMetrics(
+                    model_name=original_model,
+                    inference_time=sum(m.inference_time for m in original_metrics) / len(original_metrics),
+                    tokens_per_second=sum(m.tokens_per_second for m in original_metrics) / len(original_metrics),
+                    total_tokens=int(sum(m.total_tokens for m in original_metrics) / len(original_metrics)),
+                    memory_delta_mb=sum(m.memory_delta_mb for m in original_metrics) / len(original_metrics),
+                    success=True
+                )
+                
+                avg_compressed = ModelMetrics(
+                    model_name=compressed_model,
+                    inference_time=sum(m.inference_time for m in compressed_metrics) / len(compressed_metrics),
+                    tokens_per_second=sum(m.tokens_per_second for m in compressed_metrics) / len(compressed_metrics),
+                    total_tokens=int(sum(m.total_tokens for m in compressed_metrics) / len(compressed_metrics)),
+                    memory_delta_mb=sum(m.memory_delta_mb for m in compressed_metrics) / len(compressed_metrics),
+                    success=True
+                )
+                
+                # Get KV cache info
+                profile_path = f"/root/.contextlens/{original_model.replace('/', '_').replace(':', '_')}.json"
+                kv_cache_info = calculate_kv_cache(original_model, profile_path)
+                
+                console.print("\n")
+                display_comparison(avg_original, avg_compressed, kv_cache_info)
+            else:
+                console.print("[bold red]No successful runs to average![/bold red]")
+        
+    except ImportError as exc:
+        _handle_error(f"Could not import comparison module: {exc}")
+    except Exception as exc:
+        _handle_error(f"Comparison failed: {exc}", exc)
