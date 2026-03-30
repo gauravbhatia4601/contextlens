@@ -2,6 +2,7 @@
 Ollama integration for ContextLens.
 
 Patches Ollama Modelfiles to activate ContextLens compression at inference time.
+Supports both legacy Ollama (< v0.5) and modern blob-based storage (≥ v0.5).
 """
 
 from __future__ import annotations
@@ -10,8 +11,10 @@ import subprocess
 from typing import Optional, Tuple
 
 import requests
+from rich.console import Console
 
 OLLAMA_API = "http://localhost:11434"
+console = Console()
 
 
 def get_modelfile(model_name: str) -> str:
@@ -110,7 +113,8 @@ def patch_modelfile(original: str, profile_path: str) -> str:
 def apply_to_ollama(model_name: str, profile_path: str) -> None:
     """Apply ContextLens compression to an Ollama model.
 
-    Patches the Modelfile and recreates the model with the new configuration.
+    Uses Ollama API to create a new derived model with contextlens_profile parameter.
+    Works with both legacy and blob-based storage (Ollama v0.5+).
 
     Args:
         model_name: Name of the Ollama model
@@ -124,23 +128,62 @@ def apply_to_ollama(model_name: str, profile_path: str) -> None:
             f"Model '{model_name}' not found. Pull it first: ollama pull {model_name}"
         )
 
-    original = get_modelfile(model_name)
-    patched = patch_modelfile(original, profile_path)
+    # Create a NEW model name with "-contextlens" suffix
+    new_model_name = f"{model_name}-contextlens"
+    
+    console.print(f"\n[bold blue]Creating compressed model: {new_model_name}[/bold blue]")
+    console.print(f"[dim]Profile: {profile_path}[/dim]\n")
 
+    # Build the Modelfile content
+    modelfile_content = f"FROM {model_name}\nPARAMETER contextlens_profile \"{profile_path}\"\n"
+    
+    # Use the API instead of CLI for better compatibility
+    url = f"{OLLAMA_API}/api/create"
     try:
-        subprocess.run(
-            ["ollama", "create", model_name, "-f", "-"],
-            input=patched.encode(),
-            capture_output=True,
-            check=True,
+        resp = requests.post(
+            url,
+            json={
+                "model": new_model_name,
+                "from": model_name,
+                "modelfile": modelfile_content,
+                "stream": False
+            },
+            timeout=300
         )
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode() if exc.stderr else "Unknown error"
-        raise RuntimeError(f"Failed to create Ollama model: {stderr}") from exc
-    except FileNotFoundError:
+        
+        # Check for errors
+        if resp.status_code != 200:
+            error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"error": resp.text}
+            raise RuntimeError(f"API error: {error_data.get('error', 'Unknown error')}")
+        
+        console.print(f"\n[bold green]✓ Success![/bold green]")
+        console.print(f"\nCompressed model created: [cyan]{new_model_name}[/cyan]")
+        console.print(f"\n[dim]To use the compressed model:[/dim]")
+        console.print(f"  ollama run {new_model_name}")
+        console.print(f"\n[dim]To revert to original:[/dim]")
+        console.print(f"  ollama rm {new_model_name}")
+        console.print(f"  (original {model_name} is unchanged)\n")
+        
+    except requests.exceptions.Timeout:
         raise RuntimeError(
-            "Ollama CLI not found. Ensure Ollama is installed and in PATH."
+            "Ollama API timed out. The model may be too large."
         ) from None
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError(
+            "Cannot connect to Ollama. Is it running? Start with: ollama serve"
+        ) from None
+    except Exception as exc:
+        raise RuntimeError(f"Failed to create Ollama model via API: {exc}") from exc
+
+
+def get_ollama_version() -> str:
+    """Get the Ollama version string."""
+    try:
+        resp = requests.get(f"{OLLAMA_API}/api/version", timeout=5)
+        resp.raise_for_status()
+        return resp.json().get("version", "unknown")
+    except Exception:
+        return "unknown"
 
 
 def revert_ollama(model_name: str, original_modelfile: Optional[str] = None) -> None:
@@ -153,6 +196,25 @@ def revert_ollama(model_name: str, original_modelfile: Optional[str] = None) -> 
     Raises:
         RuntimeError: If the model creation fails
     """
+    # Check if the contextlens variant exists
+    contextlens_variant = f"{model_name}-contextlens"
+    
+    if check_model_exists(contextlens_variant):
+        console.print(f"[bold yellow]Removing compressed variant: {contextlens_variant}[/bold yellow]")
+        try:
+            subprocess.run(
+                ["ollama", "rm", contextlens_variant],
+                capture_output=True,
+                check=True,
+            )
+            console.print(f"[green]✓ Removed {contextlens_variant}[/green]")
+            console.print(f"[dim]Original model {model_name} is still available.[/dim]")
+            return
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.decode() if exc.stderr else "Unknown error"
+            raise RuntimeError(f"Failed to remove compressed variant: {stderr}") from exc
+    
+    # If no variant exists, try to clean the original model
     if not check_model_exists(model_name):
         raise RuntimeError(f"Model '{model_name}' not found")
 

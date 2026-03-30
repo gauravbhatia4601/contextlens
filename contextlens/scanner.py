@@ -33,38 +33,48 @@ def _ollama_show(model_name: str) -> Dict[str, Any]:
 
 
 def _parse_ollama_modelinfo(payload: Dict[str, Any], model_name: str) -> ModelProfile:
-    """Extract the required fields from Ollama's ``modelinfo`` payload.
+    """Extract the required fields from Ollama's ``model_info`` payload.
 
     The payload contains a ``model_info`` dict with keys that are prefixed by the
-    model family (e.g. ``Llama_num_layers``).  Supported families are listed in
+    model family (e.g. ``llama.block_count``).  Supported families are listed in
     ``SUPPORTED_FAMILIES``; an unknown family raises ``ValueError``.
     """
     model_info = payload.get("model_info")
     if not isinstance(model_info, dict):
         raise ValueError("Ollama response missing 'model_info' dict")
 
-    # Identify the family – Ollama includes a ``family`` key.
-    family = model_info.get("family")
-    if not isinstance(family, str):
+    # Identify the family – newer Ollama versions put it in details.family
+    details = payload.get("details", {})
+    family = details.get("family") if isinstance(details, dict) else None
+    if not family:
+        # Fallback: try to infer from model_info keys
+        arch = model_info.get("general.architecture", "")
+        if arch:
+            family = arch.capitalize()
+    
+    if not family:
         raise ValueError("Model family information missing from Ollama response")
 
     SUPPORTED_FAMILIES = {
-        "Llama",
-        "Mistral",
-        "Phi-3",
-        "Gemma",
-        "Qwen2",
+        "llama",
+        "mistral",
+        "phi-3",
+        "gemma",
+        "qwen2",
     }
-    if family not in SUPPORTED_FAMILIES:
-        raise ValueError(f"Architecture '{family}' is not supported in Phase 1")
+    family_lower = family.lower()
+    if family_lower not in SUPPORTED_FAMILIES:
+        raise ValueError(f"Architecture '{family}' is not supported in Phase 1")
 
-    # Keys we need – they follow the pattern ``<Family>_num_layers`` etc.
-    prefix = family
+    # Keys we need – newer Ollama uses dot notation: llama.block_count, llama.attention.head_count_kv, etc.
+    prefix = family_lower
     try:
-        num_layers = int(model_info[f"{prefix}_num_layers"])
-        num_kv_heads = int(model_info[f"{prefix}_num_attention_heads"])
-        head_dim = int(model_info[f"{prefix}_head_dim"])
-        dtype = str(model_info[f"{prefix}_dtype"])
+        num_layers = int(model_info[f"{prefix}.block_count"])
+        num_kv_heads = int(model_info[f"{prefix}.attention.head_count_kv"])
+        head_dim = int(model_info[f"{prefix}.attention.value_length"])
+        # Get dtype from details or default to float16 for quantized models
+        quantization = details.get("quantization_level", "unknown") if isinstance(details, dict) else "unknown"
+        dtype = "float16"  # Default assumption for KV cache calculations
     except KeyError as exc:
         raise ValueError(f"Missing expected key {exc} in Ollama model info") from exc
 

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  contextlens-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contextlens-test
+    entrypoint: ["/app/entrypoint.sh"]
+    volumes:
+      # Persist Ollama models
+      - ollama_data:/root/.ollama
+      # Persist ContextLens profiles
+      - contextlens_data:/root/.contextlens
+    ports:
+      - "11435:11434"  # Map to different port to avoid conflict with production Ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      # Limit memory to prevent OOM
+      - OLLAMA_MAX_LOADED_MODELS=1
+    # Resource limits (adjust based on your server capacity)
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    # Restart policy
+    restart: unless-stopped
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  ollama_data:
+    driver: local
+  contextlens_data:
+    driver: local

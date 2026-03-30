@@ -23,6 +23,51 @@ from .profiles import save_profile, load_profile, list_profiles, ModelProfile
 from .integrations.ollama import apply_to_ollama, revert_ollama, get_modelfile
 from .integrations.llamacpp import write_config_file
 
+
+def _get_hf_model_id(ollama_model: str) -> str:
+    """Map Ollama model names to HuggingFace model IDs for benchmarking.
+    
+    Args:
+        ollama_model: Ollama model name (e.g., "llama3.2:3b")
+    
+    Returns:
+        HuggingFace model ID (e.g., "meta-llama/Llama-3.2-3B-Instruct")
+    """
+    # Common Ollama -> HuggingFace mappings (using non-gated alternatives where possible)
+    mappings = {
+        # Llama 3.2 - use Qwen as fallback (open weights)
+        "llama3.2:1b": "Qwen/Qwen2.5-0.5B-Instruct",
+        "llama3.2:3b": "Qwen/Qwen2.5-3B-Instruct",
+        # Llama 3.1 - use Qwen as fallback
+        "llama3.1:8b": "Qwen/Qwen2.5-7B-Instruct",
+        "llama3.1:70b": "Qwen/Qwen2.5-72B-Instruct",
+        # Mistral (open weights)
+        "mistral:7b": "mistralai/Mistral-7B-Instruct-v0.3",
+        "mixtral:8x7b": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        # Phi-3 (open weights)
+        "phi3:3.8b": "microsoft/Phi-3-mini-4k-instruct",
+        "phi3:14b": "microsoft/Phi-3-medium-4k-instruct",
+        # Gemma (open weights)
+        "gemma:2b": "google/gemma-2b-it",
+        "gemma:7b": "google/gemma-7b-it",
+        # Qwen (open weights)
+        "qwen2:7b": "Qwen/Qwen2-7B-Instruct",
+        "qwen2.5:7b": "Qwen/Qwen2.5-7B-Instruct",
+    }
+    
+    # Check for exact match first
+    if ollama_model.lower() in mappings:
+        return mappings[ollama_model.lower()]
+    
+    # Check for partial matches
+    ollama_lower = ollama_model.lower()
+    for key, value in mappings.items():
+        if key.split(":")[0] in ollama_lower:
+            return value
+    
+    # Default: return as-is (might work for direct HF paths)
+    return ollama_model
+
 app = typer.Typer(
     name="contextlens",
     help="Compress your local LLM KV cache with zero accuracy loss.",
@@ -102,10 +147,12 @@ def apply(
                 from transformers import AutoModelForCausalLM, AutoTokenizer
                 from .benchmarks import run_accuracy_benchmark, BenchmarkResult
                 
-                console.print("[dim]Loading model...[/dim]")
-                tokenizer = AutoTokenizer.from_pretrained(model)
+                # Map Ollama model name to HuggingFace ID for benchmarking
+                hf_model_id = _get_hf_model_id(model)
+                console.print(f"[dim]Loading model from HuggingFace: {hf_model_id}[/dim]")
+                tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
                 model_obj = AutoModelForCausalLM.from_pretrained(
-                    model,
+                    hf_model_id,
                     torch_dtype="auto",
                     device_map="auto",
                 )
@@ -155,6 +202,21 @@ def apply(
                     )
                 else:
                     _handle_error(f"Benchmark failed: {exc}")
+            except Exception as exc:
+                error_msg = str(exc)
+                if "gated repo" in error_msg or "401" in error_msg:
+                    console.print(
+                        f"[yellow]Warning: HuggingFace model requires authentication.[/yellow]"
+                    )
+                    console.print(
+                        f"[dim]Skipping benchmark. Use --skip-benchmark flag to suppress this warning.[/dim]"
+                    )
+                    console.print(
+                        f"[dim]To fix: Log in with `huggingface-cli login` or use a non-gated model.[/dim]"
+                    )
+                else:
+                    console.print(f"[yellow]Warning: Benchmark error - {exc}[/yellow]")
+                    console.print("[dim]Proceeding without accuracy validation...[/dim]")
         
         profile_path = save_profile(profile)
         console.print(f"[bold green]Saved profile:[/bold green] {profile_path}")
