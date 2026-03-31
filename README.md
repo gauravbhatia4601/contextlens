@@ -13,14 +13,38 @@ ContextLens is an open-source CLI tool that compresses the KV (Key-Value) cache 
 
 ## 🚀 Quick Start
 
-```bash
-# Install from PyPI
-pip install llm-contextlens
+### Installation (Choose One Method)
 
-# Or install from source
+**Method 1: Using pipx (Recommended for CLI tools)**
+```bash
+pipx install llm-contextlens
+```
+
+**Method 2: Using pip with virtual environment**
+```bash
+python3 -m venv ~/llm-contextlens-venv
+source ~/llm-contextlens-venv/bin/activate
+pip install llm-contextlens
+```
+
+**Method 3: Direct pip install (if you get PEP 668 error, use --break-system-packages)**
+```bash
+pip install llm-contextlens --break-system-packages
+```
+
+**Method 4: From source**
+```bash
 git clone https://github.com/gauravbhatia4601/contextlens.git
 cd contextlens
+python3 -m venv venv
+source venv/bin/activate
 pip install -e .
+```
+
+### Verify Installation
+
+```bash
+llm-contextlens --help
 ```
 
 ## 📋 Requirements
