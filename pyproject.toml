@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "llm-contextlens"
 version = "0.3.0"
-description = "Compress your local LLM KV cache with 5.3× memory reduction"
+description = "Compress your local LLM KV cache with 5.3× memory reduction - Install: pip install llm-contextlens"
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}

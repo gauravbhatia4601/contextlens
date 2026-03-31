@@ -99,7 +99,7 @@ def _get_hf_model_id(ollama_model: str, prefer_open: bool = True) -> str:
 
 app = typer.Typer(
     name="contextlens",
-    help="Compress your local LLM KV cache with zero accuracy loss.",
+    help="Compress your local LLM KV cache with 5.3× memory reduction. Package: llm-contextlens",
     add_completion=False,
 )
 

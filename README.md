@@ -1,6 +1,10 @@
-# ContextLens
+# ContextLens (llm-contextlens)
 
 **Compress your local LLM KV cache with 5.3× memory reduction and zero accuracy loss.**
+
+> **Package Name:** `llm-contextlens` on PyPI
+
+[![PyPI version](https://badge.fury.io/py/llm-contextlens.svg)](https://pypi.org/project/llm-contextlens/)
 
 [![PyPI version](https://badge.fury.io/py/contextlens.svg)](https://badge.fury.io/py/contextlens)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
