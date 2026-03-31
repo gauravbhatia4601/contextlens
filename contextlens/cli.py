@@ -412,12 +412,12 @@ def hf_auth(check: bool = typer.Option(False, "--check", help="Check authenticat
             login: bool = typer.Option(False, "--login", help="Log in to HuggingFace")) -> None:
     """Manage HuggingFace authentication for benchmarking."""
     try:
-        from huggingface_hub import HfFolder, whoami
+        from huggingface_hub import whoami
+        import os
         
         if login:
             console.print("[bold blue]HuggingFace Login[/bold blue]")
             console.print("\n[dim]To log in, run:[/dim]")
-            console.print("  pip install huggingface_hub")
             console.print("  huggingface-cli login")
             console.print("\n[dim]Or set environment variable:[/dim]")
             console.print("  export HF_TOKEN=your_token_here")
@@ -426,7 +426,9 @@ def hf_auth(check: bool = typer.Option(False, "--check", help="Check authenticat
         if check:
             console.print("[bold blue]HuggingFace Authentication Status[/bold blue]\n")
             
-            token = HfFolder.get_token()
+            # Check for token in environment or cache
+            token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+            
             if token:
                 try:
                     user_info = whoami(token=token)
@@ -438,19 +440,20 @@ def hf_auth(check: bool = typer.Option(False, "--check", help="Check authenticat
                     console.print(f"  1. Accept model licenses at: https://huggingface.co/settings/accepted")
                     console.print(f"  2. Request access for specific models (e.g., Llama, Gemma)")
                 except Exception:
-                    console.print(f"[green]✓ Token found[/green]")
+                    console.print(f"[green]✓ Token found in environment[/green]")
                     console.print(f"[dim]Token is set but not validated. Try running a benchmark to test.[/dim]")
             else:
                 console.print(f"[yellow]✗ Not logged in[/yellow]")
                 console.print(f"\n[dim]To enable gated models, run:[/dim]")
                 console.print(f"  huggingface-cli login")
                 console.print(f"\n[dim]Or use open-weight alternatives:[/dim]")
-                console.print(f"  contextlens apply <model> --use-open-weights")
+                console.print(f"  llm-contextlens apply <model> --use-open-weights")
                 
-    except ImportError:
+    except ImportError as exc:
         console.print(f"[yellow]huggingface_hub not installed.[/yellow]")
         console.print(f"\n[dim]Install with:[/dim]")
         console.print(f"  pip install huggingface_hub")
+        console.print(f"\n[dim]Error:[/dim] {exc}")
 
 
 @app.command()
