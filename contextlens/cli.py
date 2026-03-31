@@ -10,6 +10,8 @@ Commands:
 
 from __future__ import annotations
 
+import signal
+import sys
 import time
 
 from typing import Optional
@@ -103,6 +105,15 @@ app = typer.Typer(
     help="Compress your local LLM KV cache with 5.3× memory reduction. Package: llm-contextlens",
     add_completion=False,
 )
+
+
+def _handle_interrupt(signum, frame):
+    """Handle Ctrl+C gracefully without showing traceback."""
+    console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, _handle_interrupt)
 
 
 @app.callback(invoke_without_command=True)
