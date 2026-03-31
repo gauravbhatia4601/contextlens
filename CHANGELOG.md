@@ -5,6 +5,19 @@ All notable changes to ContextLens will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-03-31
+
+### Added
+- **CLI `--version` flag** - Show version with `llm-contextlens --version`
+  - Works with `-v` shorthand too
+  - Clean output without running any command
+
+### Fixed
+- **README upgrade instructions** - Fixed pipx syntax
+  - Changed from incorrect `pipx install --upgrade` 
+  - To correct `pipx upgrade llm-contextlens`
+  - Added separate instructions for pip vs pipx upgrades
+
 ## [0.4.3] - 2026-03-31
 
 ### Fixed

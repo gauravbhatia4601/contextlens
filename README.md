@@ -47,6 +47,18 @@ pip install -e .
 llm-contextlens --help
 ```
 
+### Upgrade
+
+**If installed with pip:**
+```bash
+pip install --upgrade llm-contextlens
+```
+
+**If installed with pipx:**
+```bash
+pipx upgrade llm-contextlens
+```
+
 ## 📋 Requirements
 
 ### System Requirements

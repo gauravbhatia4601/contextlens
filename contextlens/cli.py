@@ -117,15 +117,23 @@ signal.signal(signal.SIGINT, _handle_interrupt)
 
 
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-v", help="Show version and exit"),
+):
     """ContextLens - Compress your local LLM KV cache with 5.3× memory reduction."""
+    if version:
+        from importlib.metadata import version as get_version
+        console.print(f"llm-contextlens {get_version('llm-contextlens')}")
+        raise typer.Exit(0)
+    
     # Check for updates when a command is invoked
     if ctx.invoked_subcommand is not None:
         try:
-            from importlib.metadata import version
+            from importlib.metadata import version as get_version
             import requests
             
-            current_version = version("llm-contextlens")
+            current_version = get_version("llm-contextlens")
             
             # Check PyPI for latest version
             resp = requests.get("https://pypi.org/pypi/llm-contextlens/json", timeout=2)
