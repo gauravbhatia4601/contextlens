@@ -1,4 +1,4 @@
-"""CLI entry point for ContextLens.
+"""CLI entry point for llm-contextlens.
 
 Commands:
 - scan: Profile KV cache memory usage and context limits

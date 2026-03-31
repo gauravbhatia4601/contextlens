@@ -1,4 +1,4 @@
-# ContextLens (llm-contextlens)
+# ContextLens
 
 **Compress your local LLM KV cache with 5.3× memory reduction and zero accuracy loss.**
 
@@ -6,7 +6,6 @@
 
 [![PyPI version](https://badge.fury.io/py/llm-contextlens.svg)](https://pypi.org/project/llm-contextlens/)
 
-[![PyPI version](https://badge.fury.io/py/contextlens.svg)](https://badge.fury.io/py/contextlens)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -301,12 +300,6 @@ This installs:
 - mypy
 - build
 
-### Docker
-
-```bash
-docker run -it contextlens/contextlens:latest
-```
-
 ## 🐛 Troubleshooting
 
 ### "Model family information missing"
@@ -315,7 +308,7 @@ docker run -it contextlens/contextlens:latest
 
 **Fix:** Update to latest version:
 ```bash
-pip install --upgrade contextlens
+pip install --upgrade llm-llm-contextlens
 ```
 
 ### "HuggingFace model requires authentication"
@@ -342,7 +335,7 @@ llm-contextlens apply llama3.2:3b --skip-benchmark
 
 **Fix:** Update to latest version (uses API instead of CLI):
 ```bash
-pip install --upgrade contextlens
+pip install --upgrade llm-llm-contextlens
 ```
 
 The integration now creates a `-contextlens` variant automatically.
@@ -399,24 +392,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 - **Discussions:** https://github.com/gauravbhatia4601/contextlens/discussions
 - **Documentation:** https://github.com/gauravbhatia4601/contextlens/wiki
 
-## 🗺️ Roadmap
-
-### v0.3.0 (Next)
-- [ ] Web dashboard for real-time monitoring
-- [ ] Multi-GPU support
-- [ ] Automatic model selection based on available RAM
-- [ ] Export comparison reports (CSV/JSON/PDF)
-
-### v0.4.0
-- [ ] Support for MoE models (Mixtral, Grok)
-- [ ] Dynamic compression based on context length
-- [ ] Integration with vLLM and TGI
-
-### v1.0.0
-- [ ] Stable API
-- [ ] Production-ready documentation
-- [ ] Enterprise support options
-
 ---
-
-**Made with ❤️ by the ContextLens Team**

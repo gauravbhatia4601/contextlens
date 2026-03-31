@@ -68,11 +68,13 @@ llamacpp = [
     "llama-cpp-python>=0.2.60",
 ]
 all = [
-    "contextlens[ollama,llamacpp,dev]",
+    "ollama",
+    "llamacpp",
+    "dev",
 ]
 
 [project.scripts]
-contextlens = "contextlens.cli:app"
+llm-contextlens = "contextlens.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/gauravbhatia4601/contextlens"
