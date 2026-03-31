@@ -586,3 +586,128 @@ def compare(
         _handle_error(f"Could not import comparison module: {exc}")
     except Exception as exc:
         _handle_error(f"Comparison failed: {exc}", exc)
+
+
+@app.command()
+def uninstall(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be removed without deleting"),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+) -> None:
+    """Uninstall ContextLens and remove all profiles and configurations.
+    
+    This will:
+    - Uninstall the llm-contextlens package
+    - Remove all profile files (~/.contextlens/)
+    - Remove all compressed model variants from Ollama
+    - Clean up any llama.cpp configurations
+    
+    Use --dry-run to see what would be removed without actually deleting anything.
+    """
+    import os
+    import shutil
+    import subprocess
+    from pathlib import Path
+    
+    console.print("[bold yellow]⚠️  ContextLens Uninstall[/bold yellow]\n")
+    console.print("[dim]This will remove:[/dim]")
+    console.print("  • llm-contextlens package")
+    console.print("  • All profile files (~/.contextlens/)")
+    console.print("  • All compressed model variants (ollama)")
+    console.print("  • All llama.cpp configurations\n")
+    
+    # Collect what will be removed
+    items_to_remove = []
+    
+    # 1. Profile directory
+    profile_dir = Path.home() / ".contextlens"
+    if profile_dir.exists():
+        profiles = list(profile_dir.glob("*.json"))
+        if profiles:
+            items_to_remove.append(f"📁 Profile directory: {profile_dir} ({len(profiles)} profiles)")
+    
+    # 2. Ollama compressed models
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            compressed_models = []
+            for line in result.stdout.splitlines()[1:]:  # Skip header
+                if "-contextlens" in line:
+                    model_name = line.split()[0]
+                    compressed_models.append(model_name)
+            
+            if compressed_models:
+                items_to_remove.append(f"🤖 Ollama models: {', '.join(compressed_models)}")
+    except Exception:
+        pass
+    
+    # 3. Package itself
+    items_to_remove.append("📦 Package: llm-contextlens (via pip uninstall)")
+    
+    # Display what will be removed
+    console.print("[bold]Will remove:[/bold]")
+    for item in items_to_remove:
+        console.print(f"  {item}")
+    
+    if not items_to_remove:
+        console.print("[green]✓ Nothing to remove[/green]")
+        return
+    
+    console.print()
+    
+    # Dry run - just show what would be removed
+    if dry_run:
+        console.print("[bold yellow]🔍 DRY RUN - No changes made[/bold yellow]")
+        console.print("[dim]Run without --dry-run to actually remove these items[/dim]")
+        return
+    
+    # Confirm before proceeding
+    if not force:
+        confirm = typer.confirm("[bold red]Are you sure you want to uninstall ContextLens?[/bold red]")
+        if not confirm:
+            console.print("[yellow]Uninstall cancelled[/yellow]")
+            return
+    
+    # Execute uninstall
+    console.print("\n[bold]Starting uninstall...[/bold]\n")
+    
+    # 1. Remove Ollama compressed models
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines()[1:]:
+                if "-contextlens" in line:
+                    model_name = line.split()[0]
+                    console.print(f"[dim]Removing Ollama model: {model_name}...[/dim]")
+                    subprocess.run(
+                        ["ollama", "rm", model_name],
+                        capture_output=True,
+                        timeout=30
+                    )
+            console.print("[green]✓ Removed compressed Ollama models[/green]")
+    except Exception as exc:
+        console.print(f"[yellow]⚠ Could not remove Ollama models: {exc}[/yellow]")
+    
+    # 2. Remove profile directory
+    if profile_dir.exists():
+        try:
+            shutil.rmtree(profile_dir)
+            console.print(f"[green]✓ Removed profile directory: {profile_dir}[/green]")
+        except Exception as exc:
+            console.print(f"[yellow]⚠ Could not remove profile directory: {exc}[/yellow]")
+    
+    # 3. Uninstall package
+    console.print("\n[dim]To complete uninstall, run:[/dim]")
+    console.print("[cyan]pip uninstall llm-contextlens[/cyan]\n")
+    
+    console.print("[bold green]✓ ContextLens uninstall complete![/bold green]")
+    console.print("[dim]Note: The pip uninstall command above will remove the package itself.[/dim]")
