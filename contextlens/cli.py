@@ -108,6 +108,27 @@ app = typer.Typer(
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     """ContextLens - Compress your local LLM KV cache with 5.3× memory reduction."""
+    # Check for updates when a command is invoked
+    if ctx.invoked_subcommand is not None:
+        try:
+            from importlib.metadata import version
+            import requests
+            
+            current_version = version("llm-contextlens")
+            
+            # Check PyPI for latest version
+            resp = requests.get("https://pypi.org/pypi/llm-contextlens/json", timeout=2)
+            if resp.status_code == 200:
+                latest_version = resp.json()["info"]["version"]
+                
+                if latest_version != current_version:
+                    console.print(f"\n[yellow]⚠️  Update available![/yellow]")
+                    console.print(f"[dim]Current: {current_version} → Latest: {latest_version}[/dim]")
+                    console.print(f"[dim]Upgrade: [cyan]pip install --upgrade llm-contextlens[/cyan]\n")
+        except Exception:
+            # Silently fail if version check doesn't work
+            pass
+    
     if ctx.invoked_subcommand is None:
         # Show help when no command is provided
         print(ctx.get_help())
@@ -724,3 +745,4 @@ def uninstall(
     
     console.print("[bold green]✓ ContextLens uninstall complete![/bold green]")
     console.print("[dim]Note: The pip uninstall command above will remove the package itself.[/dim]")
+

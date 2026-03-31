@@ -332,7 +332,7 @@ This installs:
 
 **Fix:** Update to latest version:
 ```bash
-pip install --upgrade llm-llm-contextlens
+pip install --upgrade llm-contextlens
 ```
 
 ### "HuggingFace model requires authentication"
@@ -359,7 +359,7 @@ llm-contextlens apply llama3.2:3b --skip-benchmark
 
 **Fix:** Update to latest version (uses API instead of CLI):
 ```bash
-pip install --upgrade llm-llm-contextlens
+pip install --upgrade llm-contextlens
 ```
 
 The integration now creates a `-contextlens` variant automatically.
