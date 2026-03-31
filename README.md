@@ -12,7 +12,7 @@ ContextLens is an open-source CLI tool that compresses the KV (Key-Value) cache 
 
 ```bash
 # Install from PyPI
-pip install contextlens
+pip install llm-contextlens
 
 # Or install from source
 git clone https://github.com/gauravbhatia4601/contextlens.git
@@ -70,7 +70,7 @@ When running large models locally, two components consume RAM:
 Profile KV cache memory usage and context limits:
 
 ```bash
-contextlens scan llama3.1:70b
+llm-contextlens scan llama3.1:70b
 ```
 
 **Example output:**
@@ -94,25 +94,25 @@ Apply TurboQuant compression and validate accuracy:
 
 ```bash
 # With benchmark (requires HuggingFace access)
-contextlens apply llama3.1:70b
+llm-contextlens apply llama3.1:70b
 
 # With open-weight models (no auth needed)
-contextlens apply llama3.1:70b --use-open-weights
+llm-contextlens apply llama3.1:70b --use-open-weights
 
 # Skip benchmark (faster)
-contextlens apply llama3.1:70b --skip-benchmark
+llm-contextlens apply llama3.1:70b --skip-benchmark
 ```
 
 **Benchmark options:**
 ```bash
 # Use gated models (requires HF login)
-contextlens apply llama3.1:70b --use-gated
+llm-contextlens apply llama3.1:70b --use-gated
 
 # Custom benchmark settings
-contextlens apply llama3.1:70b --dataset hellaswag --n-questions 100
+llm-contextlens apply llama3.1:70b --dataset hellaswag --n-questions 100
 
 # Force apply even if accuracy drops >1%
-contextlens apply llama3.1:70b --force
+llm-contextlens apply llama3.1:70b --force
 ```
 
 ### 3. Integrate with Runtime
@@ -121,13 +121,13 @@ Patch your runtime to use the compressed model:
 
 ```bash
 # For Ollama (creates llama3.1:70b-contextlens)
-contextlens integrate ollama --model llama3.1:70b
+llm-contextlens integrate ollama --model llama3.1:70b
 
 # For llama.cpp
-contextlens integrate llamacpp --model llama3.1:70b
+llm-contextlens integrate llamacpp --model llama3.1:70b
 
 # For HuggingFace
-contextlens integrate huggingface
+llm-contextlens integrate huggingface
 ```
 
 ### 4. Check Status
@@ -135,7 +135,7 @@ contextlens integrate huggingface
 View all compressed models:
 
 ```bash
-contextlens status
+llm-contextlens status
 ```
 
 **Example output:**
@@ -153,16 +153,16 @@ Run side-by-side comparison of original vs compressed:
 
 ```bash
 # Quick comparison
-contextlens compare llama3.1:70b
+llm-contextlens compare llama3.1:70b
 
 # Multiple iterations for accuracy
-contextlens compare llama3.1:70b -n 5
+llm-contextlens compare llama3.1:70b -n 5
 
 # Custom prompt
-contextlens compare llama3.1:70b -p "Your prompt here"
+llm-contextlens compare llama3.1:70b -p "Your prompt here"
 
 # From file
-contextlens compare llama3.1:70b -f prompt.txt
+llm-contextlens compare llama3.1:70b -f prompt.txt
 ```
 
 **Example comparison output:**
@@ -185,7 +185,7 @@ contextlens compare llama3.1:70b -f prompt.txt
 Remove compression and restore original config:
 
 ```bash
-contextlens revert llama3.1:70b
+llm-contextlens revert llama3.1:70b
 ```
 
 ## 🔧 Advanced Features
@@ -196,10 +196,10 @@ Check authentication status for gated models:
 
 ```bash
 # Check if logged in
-contextlens hf-auth --check
+llm-contextlens hf-auth --check
 
 # Get login instructions
-contextlens hf-auth --login
+llm-contextlens hf-auth --login
 ```
 
 **To enable gated models (Llama, Gemma, etc.):**
@@ -227,13 +227,13 @@ This creates a container with:
 
 ```bash
 # Custom bit width (2-4 bits)
-contextlens apply llama3.1:70b --bits 3
+llm-contextlens apply llama3.1:70b --bits 3
 
 # Different benchmark dataset
-contextlens apply llama3.1:70b --dataset hellaswag
+llm-contextlens apply llama3.1:70b --dataset hellaswag
 
 # Fewer benchmark questions (faster)
-contextlens apply llama3.1:70b --n-questions 100
+llm-contextlens apply llama3.1:70b --n-questions 100
 ```
 
 ## 📊 Benchmarks
@@ -273,7 +273,7 @@ contextlens apply llama3.1:70b --n-questions 100
 ### From PyPI (Recommended)
 
 ```bash
-pip install contextlens
+pip install llm-contextlens
 ```
 
 ### From Source
@@ -318,18 +318,18 @@ pip install --upgrade contextlens
 
 **Option 1:** Use open-weight models (default)
 ```bash
-contextlens apply llama3.2:3b --use-open-weights
+llm-contextlens apply llama3.2:3b --use-open-weights
 ```
 
 **Option 2:** Log in to HuggingFace
 ```bash
 huggingface-cli login
-contextlens apply llama3.2:3b --use-gated
+llm-contextlens apply llama3.2:3b --use-gated
 ```
 
 **Option 3:** Skip benchmark
 ```bash
-contextlens apply llama3.2:3b --skip-benchmark
+llm-contextlens apply llama3.2:3b --skip-benchmark
 ```
 
 ### "Ollama create failed: no Modelfile"
@@ -347,13 +347,13 @@ The integration now creates a `-contextlens` variant automatically.
 
 **Fix:** Reduce benchmark batch size or use smaller model:
 ```bash
-contextlens apply llama3.1:70b --skip-benchmark
+llm-contextlens apply llama3.1:70b --skip-benchmark
 ```
 
 Or run on CPU:
 ```bash
 export CUDA_VISIBLE_DEVICES=""
-contextlens apply llama3.1:70b
+llm-contextlens apply llama3.1:70b
 ```
 
 ## 🤝 Contributing

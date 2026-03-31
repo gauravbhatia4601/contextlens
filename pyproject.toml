@@ -3,17 +3,17 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "contextlens"
+name = "llm-contextlens"
 version = "0.3.0"
 description = "Compress your local LLM KV cache with 5.3× memory reduction"
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "ContextLens Team", email = "contextlens@example.com"}
+    {name = "ContextLens", email = "contextlens@example.com"}
 ]
 maintainers = [
-    {name = "ContextLens Team", email = "contextlens@example.com"}
+    {name = "ContextLens", email = "contextlens@example.com"}
 ]
 keywords = [
     "llm",
@@ -81,6 +81,9 @@ Issues = "https://github.com/gauravbhatia4601/contextlens/issues"
 Discussions = "https://github.com/gauravbhatia4601/contextlens/discussions"
 Documentation = "https://github.com/gauravbhatia4601/contextlens/wiki"
 Changelog = "https://github.com/gauravbhatia4601/contextlens/releases"
+
+[tool.setuptools]
+license-files = []
 
 [tool.setuptools.packages.find]
 include = ["contextlens*"]
