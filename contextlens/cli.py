@@ -13,6 +13,7 @@ from __future__ import annotations
 import time
 
 from typing import Optional
+import typer
 
 import typer
 from rich.console import Console
@@ -98,10 +99,19 @@ def _get_hf_model_id(ollama_model: str, prefer_open: bool = True) -> str:
     return ollama_model
 
 app = typer.Typer(
-    name="contextlens",
+    name="llm-contextlens",
     help="Compress your local LLM KV cache with 5.3× memory reduction. Package: llm-contextlens",
     add_completion=False,
 )
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """ContextLens - Compress your local LLM KV cache with 5.3× memory reduction."""
+    if ctx.invoked_subcommand is None:
+        # Show help when no command is provided
+        print(ctx.get_help())
+        raise typer.Exit()
 
 console = Console()
 
