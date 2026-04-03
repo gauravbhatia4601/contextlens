@@ -5,6 +5,8 @@ Commands:
 - apply: Apply TurboQuant compression and validate accuracy
 - status: Show all compressed models and compression stats
 - hf-auth: Manage HuggingFace authentication
+- revert: Remove a model's compression profile
+- serve: Start the ContextLens API server
 """
 
 from __future__ import annotations
@@ -394,6 +396,20 @@ def revert(model: str = typer.Argument(..., help="Model name to remove profile")
         _handle_error(str(exc), exc)
     except Exception as exc:
         _handle_error(f"Unexpected error: {exc}", exc)
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind to"),
+    port: int = typer.Option(8080, "--port", help="Port to bind to"),
+) -> None:
+    """Start the ContextLens API server.
+
+    Provides an OpenAI-compatible API for compressed models.
+    """
+    from contextlens.proxy import run_proxy
+
+    run_proxy(host=host, port=port)
 
 
 if __name__ == "__main__":

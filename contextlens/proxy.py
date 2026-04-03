@@ -396,12 +396,21 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     port = DEFAULT_PORT
 
-    if len(sys.argv) > 2 and sys.argv[1] == "serve":
-        for i, arg in enumerate(sys.argv[2:], 2):
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        args = sys.argv[2:]
+        i = 0
+        while i < len(args):
+            arg = args[i]
             if arg.startswith("--host="):
                 host = arg.split("=", 1)[1]
+            elif arg == "--host" and i + 1 < len(args):
+                host = args[i + 1]
+                i += 1
             elif arg.startswith("--port="):
                 port = int(arg.split("=", 1)[1])
+            elif arg == "--port" and i + 1 < len(args):
+                port = int(args[i + 1])
+                i += 1
             elif arg == "--help":
                 print("Usage: python -m contextlens.proxy serve [--host=HOST] [--port=PORT]")
                 print()
@@ -409,5 +418,6 @@ if __name__ == "__main__":
                 print("  --host    Host to bind to (default: 0.0.0.0)")
                 print("  --port    Port to bind to (default: 8080)")
                 sys.exit(0)
+            i += 1
 
     run_proxy(host, port)

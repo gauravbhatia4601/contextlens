@@ -48,6 +48,9 @@ dependencies = [
     "huggingface-hub>=0.22.0",
     "numpy>=1.26.0",
     "pydantic>=2.0.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "accelerate>=0.25.0",
 ]
 
 [project.optional-dependencies]
@@ -59,12 +62,7 @@ dev = [
     "build>=1.0.0",
     "twine>=4.0.0",
 ]
-proxy = [
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-]
 all = [
-    "proxy",
     "dev",
 ]
 
