@@ -1,0 +1,38 @@
+# ContextLens Proxy Server with Ollama backend
+# Usage: docker-compose -f docker-compose.proxy.yml up
+
+services:
+  contextlens-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount profiles directory
+      - ~/.contextlens:/root/.contextlens:ro
+      # Mount model cache (optional - speeds up repeated starts)
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - CONTEXTLENS_PROFILES_DIR=/root/.contextlens
+      - CONTEXTLENS_PORT=8080
+      # Points to host machine where Ollama runs
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      # Access host machine from container
+      - "host.docker.internal:host-gateway"
+    # GPU support (optional - remove if not needed)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

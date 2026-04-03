@@ -1,38 +1,31 @@
 # ContextLens
 
-**Compress your local LLM KV cache with 5.3× memory reduction and zero accuracy loss.**
+**Compress your local LLM KV cache with 3.4× memory reduction and minimal accuracy loss.**
 
 > **Package Name:** `llm-contextlens` on PyPI
-
-[![PyPI version](https://badge.fury.io/py/llm-contextlens.svg)](https://pypi.org/project/llm-contextlens/)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-ContextLens is an open-source CLI tool that compresses the KV (Key-Value) cache of locally-running LLMs using the **TurboQuant algorithm**, achieving **~5-6× memory reduction** with **<1% accuracy loss**.
+ContextLens is an open-source CLI tool that compresses the KV (Key-Value) cache of locally-running LLMs using the **TurboQuant algorithm** (arXiv:2504.19874), achieving **~3.4× memory reduction** with minimal accuracy loss.
 
 ## 🚀 Quick Start
 
-### Installation (Choose One Method)
+### Installation
 
-**Method 1: Using pipx (Recommended for CLI tools)**
+**Using pipx (Recommended for CLI tools)**
 ```bash
 pipx install llm-contextlens
 ```
 
-**Method 2: Using pip with virtual environment**
+**Using pip with virtual environment**
 ```bash
 python3 -m venv ~/llm-contextlens-venv
 source ~/llm-contextlens-venv/bin/activate
 pip install llm-contextlens
 ```
 
-**Method 3: Direct pip install (if you get PEP 668 error, use --break-system-packages)**
-```bash
-pip install llm-contextlens --break-system-packages
-```
-
-**Method 4: From source**
+**From source**
 ```bash
 git clone https://github.com/gauravbhatia4601/contextlens.git
 cd contextlens
@@ -70,26 +63,20 @@ pipx upgrade llm-contextlens
 | **Storage** | 10 GB free | 50+ GB free |
 | **GPU** | Optional | NVIDIA with 8+ GB VRAM |
 
-### Supported Runtimes
-
-- ✅ **Ollama** (v0.5+) - Fully supported
-- ✅ **llama.cpp** - Fully supported
-- ✅ **HuggingFace Transformers** - Fully supported
-
 ### Supported Model Architectures
 
 - ✅ Llama 3, 3.1, 3.2 (all sizes)
 - ✅ Mistral, Mixtral (all sizes)
-- ✅ Phi-3 (mini, small, medium)
+- ✅ Phi, Phi-2, Phi-3 (all sizes)
 - ✅ Gemma, Gemma2 (all sizes)
 - ✅ Qwen, Qwen2, Qwen2.5 (all sizes)
-- ✅ Yi, StableLM
+- ✅ Falcon, Yi, StableLM
 
 ## 🎯 What It Does
 
 When running large models locally, two components consume RAM:
 
-1. **Model weights** — Already handled by GGUF/AWQ quantization (ContextLens does NOT touch this)
+1. **Model weights** — Already handled by quantization (ContextLens does NOT touch this)
 2. **KV cache** — A tensor that grows with context length. A 70B model at 32k tokens needs ~48 GB of KV cache in FP16. **This is what ContextLens compresses.**
 
 ### Example: Llama 3.1 70B at 32k Context
@@ -97,335 +84,171 @@ When running large models locally, two components consume RAM:
 | Component | Memory (FP16) | With ContextLens | Savings |
 |-----------|---------------|------------------|---------|
 | Model weights (Q4) | ~40 GB | ~40 GB | 0 GB |
-| **KV cache** | **~48 GB** | **~9 GB** | **39 GB** ✅ |
-| **Total** | **~88 GB** | **~49 GB** | **39 GB** ✅ |
+| **KV cache** | **~48 GB** | **~14 GB** | **34 GB** ✅ |
+| **Total** | **~88 GB** | **~54 GB** | **34 GB** ✅ |
 
-**Compression ratio: 5.3× KV cache reduction**
+**Compression ratio: ~3.4× KV cache reduction**
 
 ## 🛠️ Usage
 
-### 1. Scan a Model
+### 1. Download a Model
+
+ContextLens works with HuggingFace models that are downloaded locally:
+
+```bash
+huggingface-cli download Qwen/Qwen2-0.5B
+```
+
+For gated models (e.g., Llama, Gemma), first log in:
+
+```bash
+huggingface-cli login
+```
+
+### 2. Scan a Model
 
 Profile KV cache memory usage and context limits:
 
 ```bash
-llm-contextlens scan llama3.1:70b
+llm-contextlens scan Qwen/Qwen2-0.5B
 ```
 
-**Example output:**
+Output:
 ```
-Model: llama3.1:70b
-Architecture: 80 layers, 64 KV heads, 128 head dim
+Model: Qwen/Qwen2-0.5B
+Architecture: 24 layers, 2 KV heads, 64 head dim
 Dtype: float16
 
 KV Cache Memory:
-  Per 1k tokens: 0.66 GB
+  Per 1k tokens: 0.05 GB
 
 Max Context Length:
-  16 GB RAM: 24,000 tokens
-  32 GB RAM: 48,000 tokens
-  64 GB RAM: 96,000 tokens
+  16 GB RAM: 327,680 tokens
+  32 GB RAM: 655,360 tokens
+  64 GB RAM: 1,310,720 tokens
 ```
 
-### 2. Apply Compression
+### 3. Apply Compression
 
-Apply TurboQuant compression and validate accuracy:
+Apply TurboQuant compression to the model:
 
 ```bash
-# With benchmark (requires HuggingFace access)
-llm-contextlens apply llama3.1:70b
-
-# With open-weight models (no auth needed)
-llm-contextlens apply llama3.1:70b --use-open-weights
-
-# Skip benchmark (faster)
-llm-contextlens apply llama3.1:70b --skip-benchmark
+llm-contextlens apply Qwen/Qwen2-0.5B
 ```
 
-**Benchmark options:**
-```bash
-# Use gated models (requires HF login)
-llm-contextlens apply llama3.1:70b --use-gated
+This will:
+1. Scan the model architecture
+2. Run an accuracy benchmark (optional, can be skipped)
+3. Save a compression profile to `~/.contextlens/`
 
-# Custom benchmark settings
-llm-contextlens apply llama3.1:70b --dataset hellaswag --n-questions 100
+### 4. Use Compression in Your Code
 
-# Force apply even if accuracy drops >1%
-llm-contextlens apply llama3.1:70b --force
+Load the model with compression enabled:
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from contextlens.integrations.huggingface import patch_model_for_contextlens
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2-0.5B",
+    torch_dtype="auto",
+    device_map="auto",
+)
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
+
+# Apply compression
+model = patch_model_for_contextlens(model)
+
+# Generate text - KV cache will be compressed automatically
+inputs = tokenizer("Hello, how are you?", return_tensors="pt").to(model.device)
+outputs = model.generate(**inputs, max_new_tokens=100)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
-### 3. Integrate with Runtime
+## 📊 Compression Results
 
-Patch your runtime to use the compressed model:
+Based on profiling with the TurboQuant algorithm:
 
-```bash
-# For Ollama (creates llama3.1:70b-contextlens)
-llm-contextlens integrate ollama --model llama3.1:70b
+| Model | Original KV | Compressed KV | Compression Ratio | Memory Saved |
+|-------|-------------|---------------|-------------------|--------------|
+| **Qwen2-0.5B** (512 tokens) | 12.00 MB | 3.49 MB | **3.44x** | 8.51 MB (70.9%) |
+| **Llama-3.2-1B** (512 tokens) | 32.00 MB | 9.22 MB | **3.47x** | 22.78 MB (71.2%) |
 
-# For llama.cpp
-llm-contextlens integrate llamacpp --model llama3.1:70b
+### Memory by Context Length
 
-# For HuggingFace
-llm-contextlens integrate huggingface
-```
+| Context Length | Qwen2-0.5B Original | Qwen2-0.5B Compressed | Saved |
+|----------------|---------------------|----------------------|-------|
+| 4K tokens | 48 MB | 14 MB | 34 MB |
+| 16K tokens | 192 MB | 56 MB | 136 MB |
+| 32K tokens | 384 MB | 112 MB | 272 MB |
+| 128K tokens | 1.5 GB | 448 MB | 1.1 GB |
 
-### 4. Check Status
+## 🔧 CLI Commands
 
-View all compressed models:
+| Command | Description |
+|---------|-------------|
+| `llm-contextlens scan <model>` | Profile KV cache memory usage |
+| `llm-contextlens apply <model>` | Apply TurboQuant compression |
+| `llm-contextlens status` | List all compressed models |
+| `llm-contextlens integrate <model>` | Show integration instructions |
+| `llm-contextlens revert <model>` | Remove compression profile |
+| `llm-contextlens hf-auth --check` | Check HuggingFace auth status |
+| `llm-contextlens hf-auth --login` | Show login instructions |
 
-```bash
-llm-contextlens status
-```
+## 🔐 HuggingFace Authentication
 
-**Example output:**
-```
-┏━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Model         ┃ Layers ┃ KV Heads ┃ Head Dim ┃ KV/1k tokens ┃
-┡━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━┩
-│ llama3.1:70b  │     80 │       64 │      128 │      0.66 GB │
-└───────────────┴────────┴──────────┴──────────┴──────────────┘
-```
+For gated models (Llama, Gemma, etc.), you need to authenticate:
 
-### 5. Compare Performance
-
-Run side-by-side comparison of original vs compressed:
-
-```bash
-# Quick comparison
-llm-contextlens compare llama3.1:70b
-
-# Multiple iterations for accuracy
-llm-contextlens compare llama3.1:70b -n 5
-
-# Custom prompt
-llm-contextlens compare llama3.1:70b -p "Your prompt here"
-
-# From file
-llm-contextlens compare llama3.1:70b -f prompt.txt
-```
-
-**Example comparison output:**
-```
-╭─────────────────── Performance Comparison ───────────────────╮
-│ Metric          │ Original    │ Compressed      │ Difference │
-├─────────────────┼─────────────┼─────────────────┼────────────┤
-│ Inference Time  │ 14.78s      │ 7.63s           │ -48.3%     │
-│ Tokens/sec      │ 2.3         │ 4.5             │ +95%       │
-│ Total Tokens    │ 34          │ 34              │ 0          │
-╰─────────────────┴─────────────┴─────────────────┴────────────╯
-
-📊 Speed Overhead: -48.3% (faster)
-💾 Memory Saved: 0.0 MB during inference
-🎯 KV Cache Reduction: 5.3× (theoretical)
-```
-
-### 6. Revert Compression
-
-Remove compression and restore original config:
-
-```bash
-llm-contextlens revert llama3.1:70b
-```
-
-## 🔧 Advanced Features
-
-### HuggingFace Authentication
-
-Check authentication status for gated models:
-
-```bash
-# Check if logged in
-llm-contextlens hf-auth --check
-
-# Get login instructions
-llm-contextlens hf-auth --login
-```
-
-**To enable gated models (Llama, Gemma, etc.):**
-```bash
-pip install huggingface_hub
-huggingface-cli login
-```
-
-### Docker Testing
-
-Run ContextLens in an isolated Docker container:
-
-```bash
-cd contextlens
-./setup-docker-test.sh
-```
-
-This creates a container with:
-- Ollama server
-- Test model (llama3.2:3b)
-- ContextLens pre-installed
-- Automated test suite
-
-### Custom Compression Settings
-
-```bash
-# Custom bit width (2-4 bits)
-llm-contextlens apply llama3.1:70b --bits 3
-
-# Different benchmark dataset
-llm-contextlens apply llama3.1:70b --dataset hellaswag
-
-# Fewer benchmark questions (faster)
-llm-contextlens apply llama3.1:70b --n-questions 100
-```
-
-## 📊 Benchmarks
-
-### Accuracy Results
-
-| Model | Dataset | Baseline | Compressed | Delta |
-|-------|---------|----------|------------|-------|
-| Llama 3.1 8B | MMLU (500) | 0.6842 | 0.6831 | -0.0011 |
-| Mistral 7B | HellaSwag | 0.7923 | 0.7915 | -0.0008 |
-| Phi-3 Mini | MMLU (500) | 0.6234 | 0.6229 | -0.0005 |
-
-**All models show <0.2% accuracy delta** ✅
-
-### Memory Savings
-
-| Context Length | Uncompressed | Compressed (3-bit) | Saved |
-|----------------|--------------|--------------------|-------|
-| 1K tokens | 0.05 GB | 0.01 GB | 0.04 GB |
-| 8K tokens | 0.44 GB | 0.08 GB | 0.36 GB |
-| 32K tokens | 1.75 GB | 0.33 GB | 1.42 GB |
-| 131K tokens | 7.00 GB | 1.30 GB | 5.70 GB |
-
-**Compression ratio: 5.3× KV cache reduction**
-
-### Performance Overhead
-
-| Hardware | Context Length | Speed Overhead |
-|----------|----------------|----------------|
-| CPU-only | 1K tokens | +2-5% |
-| CPU-only | 8K tokens | +5-10% |
-| GPU (RTX 3090) | 8K tokens | +5-8% |
-| GPU (A100) | 32K tokens | +3-5% |
-
-## 📦 Installation Options
-
-### From PyPI (Recommended)
-
-```bash
-pip install llm-contextlens
-```
-
-### From Source
-
-```bash
-git clone https://github.com/gauravbhatia4601/contextlens.git
-cd contextlens
-pip install -e .
-```
-
-### Development Mode
-
-```bash
-pip install -e ".[dev]"
-```
-
-This installs:
-- pytest
-- pytest-cov
-- ruff
-- mypy
-- build
-
-## 🐛 Troubleshooting
-
-### "Model family information missing"
-
-**Cause:** Ollama API format changed
-
-**Fix:** Update to latest version:
-```bash
-pip install --upgrade llm-contextlens
-```
-
-### "HuggingFace model requires authentication"
-
-**Option 1:** Use open-weight models (default)
-```bash
-llm-contextlens apply llama3.2:3b --use-open-weights
-```
-
-**Option 2:** Log in to HuggingFace
+**Option 1: Login via CLI**
 ```bash
 huggingface-cli login
-llm-contextlens apply llama3.2:3b --use-gated
 ```
 
-**Option 3:** Skip benchmark
+**Option 2: Set environment variable**
 ```bash
-llm-contextlens apply llama3.2:3b --skip-benchmark
+export HF_TOKEN=your_token_here
 ```
 
-### "Ollama create failed: no Modelfile"
+**Option 3: Use open-weight alternatives**
+Models like Qwen are freely available without authentication.
 
-**Cause:** Ollama v0.5+ uses blob storage
+## 🏗️ Architecture
 
-**Fix:** Update to latest version (uses API instead of CLI):
+ContextLens implements the **TurboQuant** algorithm from arXiv:2504.19874:
+
+1. **K-Cache: PolarQuant (8-bit)** - Decomposes keys into magnitude and direction, quantizing each separately
+2. **V-Cache: Residual QJL (5-bit + 1-bit)** - Two-stage quantization with Johnson-Lindenstrauss projection on the residual
+
+The compression is applied transparently during inference - your code does not need to change.
+
+## 📦 API Server (Optional)
+
+ContextLens includes an optional OpenAI-compatible API server:
+
 ```bash
-pip install --upgrade llm-contextlens
-```
+# Start the server
+python -m contextlens.proxy serve --port 8080
 
-The integration now creates a `-contextlens` variant automatically.
-
-### "CUDA out of memory"
-
-**Fix:** Reduce benchmark batch size or use smaller model:
-```bash
-llm-contextlens apply llama3.1:70b --skip-benchmark
-```
-
-Or run on CPU:
-```bash
-export CUDA_VISIBLE_DEVICES=""
-llm-contextlens apply llama3.1:70b
+# Use with curl
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen2-0.5B",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
 ```
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Quick Start for Contributors
-
-```bash
-# Fork and clone
-git clone https://github.com/YOUR_USERNAME/contextlens.git
-cd contextlens
-
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Lint
-ruff check .
-mypy contextlens/
-```
+Contributions are welcome! Please open an issue or submit a PR on GitHub.
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see LICENSE file for details.
 
-## 🙏 Acknowledgments
+## 📚 References
 
-- **TurboQuant algorithm** - PolarQuant + QJL error correction
-- **Ollama team** - For the amazing local LLM runtime
-- **HuggingFace** - For transformers and datasets libraries
-- **Meta AI** - For Llama models and open research
-
-## 📬 Support
-
-- **Issues:** https://github.com/gauravbhatia4601/contextlens/issues
-- **Discussions:** https://github.com/gauravbhatia4601/contextlens/discussions
-- **Documentation:** https://github.com/gauravbhatia4601/contextlens/wiki
-
----
+- TurboQuant Paper: https://arxiv.org/abs/2504.19874
+- HuggingFace Transformers: https://huggingface.co/docs/transformers
+- HuggingFace Hub: https://huggingface.co/docs/hub

@@ -16,4 +16,5 @@ __all__ = [
     "profiles",
     "utils",
     "integrations",
+    "proxy",
 ]

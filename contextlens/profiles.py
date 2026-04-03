@@ -86,3 +86,14 @@ def list_profiles() -> List[ModelProfile]:
             data = json.load(f)
         profiles.append(ModelProfile(**data))
     return profiles
+
+
+def delete_profile(model_id: str) -> None:
+    """Delete the profile for ``model_id``.
+
+    Raises ``FileNotFoundError`` if the profile does not exist.
+    """
+    path = _profile_path(model_id)
+    if not path.exists():
+        raise FileNotFoundError(f"No profile found for '{model_id}'")
+    path.unlink()

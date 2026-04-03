@@ -1,15 +1,14 @@
 """
-Scanner implementation (Phase 1) – Ollama only.
-It contacts the local Ollama API, extracts model architecture details, and returns a
-``ModelProfile`` instance used by the CLI.
+Scanner implementation for HuggingFace models.
+
+Fetches model architecture from HuggingFace config.json and returns a
+ModelProfile instance used by the CLI.
 """
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict
-
-import requests
+from typing import Optional
+from pathlib import Path
 
 from .profiles import ModelProfile
 
@@ -17,101 +16,111 @@ from .profiles import ModelProfile
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _ollama_show(model_name: str) -> Dict[str, Any]:
-    """Call ``POST /api/show`` on the local Ollama server.
+def _get_hf_config(model_id: str) -> dict:
+    """Load model config from HuggingFace cache (no download).
 
-    Returns the parsed JSON dictionary.  Any network‑level problem raises a
-    ``RuntimeError`` with a concise, user‑friendly message.
+    Raises FileNotFoundError if model not in cache.
     """
-    url = "http://localhost:11434/api/show"
+    from huggingface_hub import try_to_load_from_cache
+
+    config_path = try_to_load_from_cache(
+        repo_id=model_id,
+        filename="config.json",
+    )
+
+    if config_path is None:
+        raise FileNotFoundError(
+            f"Model '{model_id}' not found in local cache.\n"
+            f"Download it first:\n"
+            f"  huggingface-cli download {model_id}\n"
+            f"\nOr in Python:\n"
+            f"  from huggingface_hub import snapshot_download\n"
+            f"  snapshot_download('{model_id}')"
+        )
+
+    from transformers import AutoConfig
     try:
-        resp = requests.post(url, json={"name": model_name}, timeout=5)
-        resp.raise_for_status()
-    except Exception as exc:
-        raise RuntimeError(f"Unable to query Ollama at {url}: {exc}") from exc
-    return resp.json()
+        config = AutoConfig.from_pretrained(
+            model_id,
+            local_files_only=True,
+            trust_remote_code=True,
+        )
+        return config
+    except Exception as e:
+        raise FileNotFoundError(
+            f"Failed to load config for '{model_id}': {e}"
+        )
 
 
-def _parse_ollama_modelinfo(payload: Dict[str, Any], model_name: str) -> ModelProfile:
-    """Extract the required fields from Ollama's ``model_info`` payload.
+def _extract_architecture(config, model_id: str) -> ModelProfile:
+    """Extract architecture details from HuggingFace config."""
 
-    The payload contains a ``model_info`` dict with keys that are prefixed by the
-    model family (e.g. ``llama.block_count``).  Supported families are listed in
-    ``SUPPORTED_FAMILIES``; an unknown family raises ``ValueError``.
-    """
-    model_info = payload.get("model_info")
-    if not isinstance(model_info, dict):
-        raise ValueError("Ollama response missing 'model_info' dict")
+    config_dict = config.to_dict()
+    arch_type = getattr(config, 'model_type', 'unknown').lower()
 
-    # Identify the family – newer Ollama versions put it in details.family
-    details = payload.get("details", {})
-    family = details.get("family") if isinstance(details, dict) else None
-    if not family:
-        # Fallback: try to infer from model_info keys
-        arch = model_info.get("general.architecture", "")
-        if arch:
-            family = arch.capitalize()
-    
-    if not family:
-        raise ValueError("Model family information missing from Ollama response")
-
-    SUPPORTED_FAMILIES = {
-        "llama",
-        "mistral",
-        "phi-3",
-        "gemma",
-        "qwen2",
+    # Map architecture type to config keys
+    key_mappings = {
+        'llama': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'mistral': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'qwen2': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'gemma': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'phi': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'phi3': {'layers': 'num_hidden_layers', 'kv_heads': 'num_key_value_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
+        'gpt2': {'layers': 'n_layer', 'kv_heads': 'n_head', 'heads': 'n_head', 'hidden': 'n_embd'},
+        'gpt_neo': {'layers': 'num_layers', 'kv_heads': 'num_heads', 'heads': 'num_heads', 'hidden': 'hidden_size'},
+        'falcon': {'layers': 'num_hidden_layers', 'kv_heads': 'num_kv_heads', 'heads': 'num_attention_heads', 'hidden': 'hidden_size'},
     }
-    family_lower = family.lower()
-    if family_lower not in SUPPORTED_FAMILIES:
-        raise ValueError(f"Architecture '{family}' is not supported in Phase 1")
 
-    # Keys we need – newer Ollama uses dot notation: llama.block_count, llama.attention.head_count_kv, etc.
-    prefix = family_lower
-    try:
-        num_layers = int(model_info[f"{prefix}.block_count"])
-        num_kv_heads = int(model_info[f"{prefix}.attention.head_count_kv"])
-        head_dim = int(model_info[f"{prefix}.attention.value_length"])
-        # Get dtype from details or default to float16 for quantized models
-        quantization = details.get("quantization_level", "unknown") if isinstance(details, dict) else "unknown"
-        dtype = "float16"  # Default assumption for KV cache calculations
-    except KeyError as exc:
-        raise ValueError(f"Missing expected key {exc} in Ollama model info") from exc
+    mapping = key_mappings.get(arch_type, key_mappings.get('llama'))
 
-    # Rough KV‑cache size per 1k tokens (FP16 = 2 bytes per value).
-    # KV cache per token = layers * heads * head_dim * 2 bytes.
-    # Convert to GB for a 1 k‑token block.
+    # Extract values
+    num_layers = getattr(config, mapping['layers'], 0)
+    num_heads = getattr(config, mapping['heads'], 0)
+    hidden_size = getattr(config, mapping['hidden'], 0)
+
+    # KV heads - some models use same heads for QKV
+    num_kv_heads = getattr(config, mapping.get('kv_heads', 'num_key_value_heads'), num_heads)
+    if num_kv_heads is None:
+        num_kv_heads = num_heads
+
+    # Head dimension
+    if hasattr(config, 'head_dim') and config.head_dim:
+        head_dim = config.head_dim
+    elif num_heads > 0:
+        head_dim = hidden_size // num_heads
+    else:
+        head_dim = 64  # Default fallback
+
+    # KV cache size: layers x kv_heads x head_dim x 2 bytes (FP16) x 1000 tokens
     kv_bytes_per_1k = num_layers * num_kv_heads * head_dim * 2 * 1000
-    kv_gb_per_1k = kv_bytes_per_1k / (1024 ** 3)  # bytes → GiB
+    kv_gb_per_1k = kv_bytes_per_1k / (1024 ** 3)
 
-    model_id = model_info.get("model_id", model_name)  # fallback to arg if missing
     return ModelProfile(
         model_id=model_id,
         num_layers=num_layers,
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
-        dtype=dtype,
+        dtype="float16",
         kv_cache_gb_per_1k_tokens=kv_gb_per_1k,
     )
+
 
 # ---------------------------------------------------------------------------
 # Public API used by the CLI
 # ---------------------------------------------------------------------------
 
-def scan_model(model_name: str, runtime: str = "auto") -> ModelProfile:
-    """Return a ``ModelProfile`` for ``model_name``.
+def scan_model(model_id: str) -> ModelProfile:
+    """Return a ModelProfile for a HuggingFace model.
 
-    Phase 1 only supports ``ollama`` (or ``auto`` which defaults to Ollama).
-    ``runtime`` values other than these raise ``NotImplementedError`` so the CLI
-    can report a clear error.
+    Args:
+        model_id: HuggingFace model ID (e.g., "Qwen/Qwen2-0.5B")
+
+    Returns:
+        ModelProfile with architecture details
+
+    Raises:
+        FileNotFoundError: If model not downloaded locally
+        ValueError: If config cannot be parsed
     """
-    if runtime not in {"auto", "ollama"}:
-        raise NotImplementedError(
-            f"Runtime '{runtime}' not implemented in Phase 1 – only Ollama is supported"
-        )
-    payload = _ollama_show(model_name)
-    return _parse_ollama_modelinfo(payload, model_name)
-
-# ---------------------------------------------------------------------------
-# End of file
-# ---------------------------------------------------------------------------
+    config = _get_hf_config(model_id)
+    return _extract_architecture(config, model_id)

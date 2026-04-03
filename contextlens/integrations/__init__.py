@@ -1,53 +1,33 @@
 """
 Integrations package for ContextLens.
 
-Provides runtime-specific integration modules for:
-- Ollama
-- llama.cpp  
-- HuggingFace Transformers
+Provides HuggingFace Transformers integration with TurboQuant compression.
 """
 
-from .ollama import (
-    get_modelfile,
-    patch_modelfile,
-    apply_to_ollama,
-    revert_ollama,
-    get_model_info,
-    check_model_exists,
-    backup_modelfile,
-)
-from .llamacpp import (
-    generate_flags,
-    write_config_file,
-    generate_llama_cpp_python_hook,
-    get_llama_cpp_version,
-    check_llama_cpp_installed,
-)
 from .huggingface import (
     patch_model_for_contextlens,
     unpatch_model,
     is_model_patched,
     ContextLensKVCache,
 )
+from ..hf_utils import (
+    get_hf_token,
+    check_model_exists_locally,
+    check_hf_auth_status,
+    ensure_model_downloaded,
+    check_gated_model_access,
+)
 
 __all__ = [
-    # Ollama
-    "get_modelfile",
-    "patch_modelfile",
-    "apply_to_ollama",
-    "revert_ollama",
-    "get_model_info",
-    "check_model_exists",
-    "backup_modelfile",
-    # llama.cpp
-    "generate_flags",
-    "write_config_file",
-    "generate_llama_cpp_python_hook",
-    "get_llama_cpp_version",
-    "check_llama_cpp_installed",
-    # HuggingFace
+    # HuggingFace integration
     "patch_model_for_contextlens",
     "unpatch_model",
     "is_model_patched",
     "ContextLensKVCache",
+    # HF utilities
+    "get_hf_token",
+    "check_model_exists_locally",
+    "check_hf_auth_status",
+    "ensure_model_downloaded",
+    "check_gated_model_access",
 ]
