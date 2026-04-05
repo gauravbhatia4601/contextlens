@@ -6,7 +6,6 @@ Commands:
 - status: Show all compressed models and compression stats
 - show: Show compression statistics for a model
 - compare: Compare original vs compressed memory usage
-- hf-auth: Manage HuggingFace authentication
 - revert: Remove a model's compression profile
 - uninstall: Remove all profiles and configurations
 - serve: Start the ContextLens API server
@@ -280,31 +279,6 @@ def apply(
 
 
 @app.command()
-def integrate(
-    model: str = typer.Argument(..., help="Model to activate compression for"),
-) -> None:
-    """Show how to activate compression in your HuggingFace code."""
-    try:
-        profile = load_profile(model)
-
-        console.print(f"[bold green]Model profile loaded:[/bold green] {model}")
-        console.print(f"\n[bold yellow]HuggingFace integration:[/bold yellow]")
-        console.print("Use patch_model_for_contextlens() in your code:")
-        console.print("")
-        console.print("  [cyan]from contextlens.integrations.huggingface import patch_model_for_contextlens[/cyan]")
-        console.print("  [cyan]model = patch_model_for_contextlens(model)[/cyan]")
-        console.print("")
-        console.print("[dim]Compression is applied when loading the model in your Python code.[/dim]")
-
-    except FileNotFoundError as exc:
-        _handle_error(f"Profile not found: {exc}", exc)
-    except RuntimeError as exc:
-        _handle_error(str(exc), exc)
-    except Exception as exc:
-        _handle_error(f"Unexpected error: {exc}", exc)
-
-
-@app.command()
 def status() -> None:
     """Show all compressed models and compression stats."""
     try:
@@ -335,53 +309,6 @@ def status() -> None:
         
     except Exception as exc:
         _handle_error(f"Error loading profiles: {exc}", exc)
-
-
-@app.command()
-def hf_auth(check: bool = typer.Option(False, "--check", help="Check authentication status"),
-            login: bool = typer.Option(False, "--login", help="Log in to HuggingFace")) -> None:
-    """Manage HuggingFace authentication for gated models."""
-    try:
-        from huggingface_hub import whoami
-        import os
-
-        if login:
-            console.print("[bold blue]HuggingFace Login[/bold blue]")
-            console.print("\n[dim]To log in, run:[/dim]")
-            console.print("  huggingface-cli login")
-            console.print("\n[dim]Or set environment variable:[/dim]")
-            console.print("  export HF_TOKEN=your_token_here")
-            return
-
-        if check:
-            console.print("[bold blue]HuggingFace Authentication Status[/bold blue]\n")
-
-            # Check for token in environment or cache
-            token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-
-            if token:
-                try:
-                    user_info = whoami(token=token)
-                    console.print(f"[green]✓ Logged in as:[/green] {user_info.get('name', 'Unknown')}")
-                    console.print(f"[dim]Email: {user_info.get('email', 'Unknown')}[/dim]")
-
-                    # Check if user has access to gated models
-                    console.print(f"\n[yellow]Note:[/yellow] Login successful, but you may need to:")
-                    console.print(f"  1. Accept model licenses at: https://huggingface.co/settings/accepted")
-                    console.print(f"  2. Request access for specific models (e.g., Llama, Gemma)")
-                except Exception:
-                    console.print(f"[green]✓ Token found in environment[/green]")
-                    console.print(f"[dim]Token is set but not validated. Try loading a gated model to test.[/dim]")
-            else:
-                console.print(f"[yellow]✗ Not logged in[/yellow]")
-                console.print(f"\n[dim]To enable gated models, run:[/dim]")
-                console.print(f"  huggingface-cli login")
-
-    except ImportError as exc:
-        console.print(f"[yellow]huggingface_hub not installed.[/yellow]")
-        console.print(f"\n[dim]Install with:[/dim]")
-        console.print(f"  pip install huggingface_hub")
-        console.print(f"\n[dim]Error:[/dim] {exc}")
 
 
 @app.command()
