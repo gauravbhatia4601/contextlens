@@ -120,12 +120,12 @@ Architecture: 24 layers, 2 KV heads, 64 head dim
 Dtype: float16
 
 KV Cache Memory:
-  Per 1k tokens: 0.05 GB
+  Per 1k tokens: 0.01 GB
 
 Max Context Length:
-  16 GB RAM: 327,680 tokens
-  32 GB RAM: 655,360 tokens
-  64 GB RAM: 1,310,720 tokens
+  16 GB RAM: 2,796,000 tokens
+  32 GB RAM: 5,592,000 tokens
+  64 GB RAM: 11,184,000 tokens
 ```
 
 ### 3. Apply Compression
@@ -133,13 +133,17 @@ Max Context Length:
 Apply TurboQuant compression to the model:
 
 ```bash
-llm-contextlens apply Qwen/Qwen2-0.5B
+llm-contextlens apply Qwen/Qwen2-0.5B --skip-benchmark
 ```
 
 This will:
 1. Scan the model architecture
-2. Run an accuracy benchmark (optional, can be skipped)
-3. Save a compression profile to `~/.contextlens/`
+2. Save a compression profile to `~/.contextlens/`
+
+To run accuracy benchmark (optional):
+```bash
+llm-contextlens apply Qwen/Qwen2-0.5B
+```
 
 ### 4. Use Compression in Your Code
 
@@ -147,7 +151,7 @@ Load the model with compression enabled:
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from contextlens.integrations.huggingface import patch_model_for_contextlens
+from contextlens.integrations import patch_model_for_contextlens
 
 # Load model
 model = AutoModelForCausalLM.from_pretrained(
@@ -157,13 +161,49 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
 
-# Apply compression
+# Apply compression (profile must exist from step 3)
 model = patch_model_for_contextlens(model)
 
 # Generate text - KV cache will be compressed automatically
 inputs = tokenizer("Hello, how are you?", return_tensors="pt").to(model.device)
 outputs = model.generate(**inputs, max_new_tokens=100)
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+```
+
+## 🔧 CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `scan <model>` | Profile KV cache memory usage |
+| `apply <model>` | Apply TurboQuant compression |
+| `status` | List all compressed models |
+| `list` | List all downloaded models and compression status |
+| `show <model>` | Show compression statistics for a model |
+| `compare <model>` | Compare original vs compressed memory usage |
+| `revert <model>` | Remove compression profile |
+| `uninstall` | Remove all profiles and configurations |
+| `serve` | Start the ContextLens API server |
+
+### Command Examples
+
+```bash
+# List all downloaded models and compression status
+llm-contextlens list
+
+# Show compression stats
+llm-contextlens show Qwen/Qwen2-0.5B
+
+# Compare memory usage at specific context length
+llm-contextlens compare Qwen/Qwen2-0.5B --context 8192
+
+# List all compressed models
+llm-contextlens status
+
+# Remove a profile
+llm-contextlens revert Qwen/Qwen2-0.5B
+
+# Start API server
+llm-contextlens serve --port 8080
 ```
 
 ## 📊 Compression Results
@@ -175,26 +215,14 @@ Based on profiling with the TurboQuant algorithm:
 | **Qwen2-0.5B** (512 tokens) | 12.00 MB | 3.49 MB | **3.44x** | 8.51 MB (70.9%) |
 | **Llama-3.2-1B** (512 tokens) | 32.00 MB | 9.22 MB | **3.47x** | 22.78 MB (71.2%) |
 
-### Memory by Context Length
+### Memory by Context Length (Qwen2-0.5B)
 
-| Context Length | Qwen2-0.5B Original | Qwen2-0.5B Compressed | Saved |
-|----------------|---------------------|----------------------|-------|
+| Context Length | Original | Compressed | Saved |
+|----------------|----------|------------|-------|
 | 4K tokens | 48 MB | 14 MB | 34 MB |
 | 16K tokens | 192 MB | 56 MB | 136 MB |
 | 32K tokens | 384 MB | 112 MB | 272 MB |
 | 128K tokens | 1.5 GB | 448 MB | 1.1 GB |
-
-## 🔧 CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `llm-contextlens scan <model>` | Profile KV cache memory usage |
-| `llm-contextlens apply <model>` | Apply TurboQuant compression |
-| `llm-contextlens status` | List all compressed models |
-| `llm-contextlens integrate <model>` | Show integration instructions |
-| `llm-contextlens revert <model>` | Remove compression profile |
-| `llm-contextlens hf-auth --check` | Check HuggingFace auth status |
-| `llm-contextlens hf-auth --login` | Show login instructions |
 
 ## 🔐 HuggingFace Authentication
 
@@ -228,14 +256,25 @@ ContextLens includes an optional OpenAI-compatible API server:
 
 ```bash
 # Start the server
-python -m contextlens.proxy serve --port 8080
+llm-contextlens serve --port 8080
 
 # Use with curl
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "Qwen/Qwen2-0.5B",
-    "messages": [{"role": "user", "content": "Hello!"}]
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 50
+  }'
+
+# Streaming response
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen2-0.5B",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 50,
+    "stream": true
   }'
 ```
 

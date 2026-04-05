@@ -152,3 +152,44 @@ def check_gated_model_access(model_id: str) -> tuple[bool, Optional[str]]:
 
     except ImportError:
         return (False, "huggingface_hub not installed")
+
+
+def list_downloaded_models() -> list[tuple[str, bool]]:
+    """List all models downloaded from HuggingFace.
+
+    Scans the HuggingFace cache directory for model folders.
+
+    Returns:
+        List of tuples: (model_id, has_profile)
+        - model_id: Full model ID (e.g., "Qwen/Qwen2-0.5B")
+        - has_profile: True if compression profile exists
+    """
+    from pathlib import Path
+    import os
+
+    # Default HF cache location
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+
+    if not hf_cache.exists():
+        return []
+
+    models = []
+
+    # Scan for model folders (format: models--org--modelname)
+    for folder in hf_cache.iterdir():
+        if folder.is_dir() and folder.name.startswith("models--"):
+            # Convert folder name to model ID
+            # models--Qwen--Qwen2-0.5B -> Qwen/Qwen2-0.5B
+            parts = folder.name.replace("models--", "").split("--")
+            if len(parts) >= 2:
+                model_id = "/".join(parts)
+
+                # Check if compression profile exists
+                from .profiles import PROFILE_DIR
+                safe_name = model_id.replace("/", "_").replace(":", "_")
+                profile_path = PROFILE_DIR / f"{safe_name}.json"
+                has_profile = profile_path.exists()
+
+                models.append((model_id, has_profile))
+
+    return sorted(models, key=lambda x: x[0])

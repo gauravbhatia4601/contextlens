@@ -29,6 +29,7 @@ from .scanner import scan_model
 from .compressor import TurboQuantCompressor
 from .profiles import save_profile, load_profile, list_profiles
 from .integrations.huggingface import patch_model_for_contextlens
+from .hf_utils import list_downloaded_models
 
 app = typer.Typer(
     name="llm-contextlens",
@@ -283,19 +284,19 @@ def status() -> None:
     """Show all compressed models and compression stats."""
     try:
         profiles = list_profiles()
-        
+
         if not profiles:
             console.print("[yellow]No compressed models found.[/yellow]")
-            console.print("Run [cyan]contextlens apply <model>[/cyan] to compress a model.")
+            console.print("Run [cyan]llm-contextlens apply <model>[/cyan] to compress a model.")
             return
-        
+
         table = Table(title="ContextLens Compressed Models")
         table.add_column("Model", style="cyan")
         table.add_column("Layers", justify="right")
         table.add_column("KV Heads", justify="right")
         table.add_column("Head Dim", justify="right")
         table.add_column("KV/1k tokens", justify="right")
-        
+
         for profile in profiles:
             table.add_row(
                 profile.model_id,
@@ -304,11 +305,49 @@ def status() -> None:
                 str(profile.head_dim),
                 f"{profile.kv_cache_gb_per_1k_tokens:.2f} GB",
             )
-        
+
         console.print(table)
-        
+
     except Exception as exc:
         _handle_error(f"Error loading profiles: {exc}", exc)
+
+
+@app.command()
+def list() -> None:
+    """List all downloaded HuggingFace models and compression status."""
+    try:
+        models = list_downloaded_models()
+
+        if not models:
+            console.print("[yellow]No models downloaded from HuggingFace.[/yellow]")
+            console.print("Download a model first:")
+            console.print("  [cyan]huggingface-cli download <model_id>[/cyan]")
+            console.print("\nExample:")
+            console.print("  [cyan]huggingface-cli download Qwen/Qwen2-0.5B[/cyan]")
+            return
+
+        table = Table(title="Downloaded HuggingFace Models")
+        table.add_column("Model", style="cyan")
+        table.add_column("Status", justify="center")
+
+        for model_id, has_profile in models:
+            if has_profile:
+                status = "[green]✓ Compressed[/green]"
+            else:
+                status = "[yellow]○ Not compressed[/yellow]"
+            table.add_row(model_id, status)
+
+        console.print(table)
+
+        # Summary
+        compressed = sum(1 for _, has_profile in models if has_profile)
+        total = len(models)
+        console.print(f"\n[bold]Summary:[/bold] {compressed}/{total} models compressed")
+        if total - compressed > 0:
+            console.print(f"[dim]Run [cyan]llm-contextlens apply <model>[/cyan] to compress uncompressed models[/dim]")
+
+    except Exception as exc:
+        _handle_error(f"Error listing models: {exc}", exc)
 
 
 @app.command()
