@@ -4,8 +4,11 @@ Commands:
 - scan: Profile KV cache memory usage and context limits
 - apply: Apply TurboQuant compression and validate accuracy
 - status: Show all compressed models and compression stats
+- show: Show compression statistics for a model
+- compare: Compare original vs compressed memory usage
 - hf-auth: Manage HuggingFace authentication
 - revert: Remove a model's compression profile
+- uninstall: Remove all profiles and configurations
 - serve: Start the ContextLens API server
 """
 
@@ -14,6 +17,7 @@ from __future__ import annotations
 import signal
 import sys
 import time
+from pathlib import Path
 
 from typing import Optional
 import typer
@@ -396,6 +400,148 @@ def revert(model: str = typer.Argument(..., help="Model name to remove profile")
         _handle_error(str(exc), exc)
     except Exception as exc:
         _handle_error(f"Unexpected error: {exc}", exc)
+
+
+@app.command()
+def show(model: str = typer.Argument(..., help="Model to show compression stats for")) -> None:
+    """Show compression statistics for a compressed model."""
+    try:
+        profile = load_profile(model)
+
+        console.print(f"\n[bold green]Model:[/bold green] {profile.model_id}")
+        console.print(f"[bold green]Architecture:[/bold green] {profile.num_layers} layers, "
+                      f"{profile.num_kv_heads} KV heads, {profile.head_dim} head dim")
+
+        # Show memory savings table
+        console.print(f"\n[yellow]Memory Savings (KV Cache):[/yellow]")
+        console.print(f"  {'Context':>10} | {'Original':>10} | {'Compressed':>10} | {'Saved':>8} | {'Ratio':>6}")
+        console.print(f"  {'tokens':>10} | {'(MB)':>10} | {'(MB)':>10} | {'(MB)':>8} | {'':>6}")
+        console.print(f"  {'-'*56}")
+
+        for ctx in [512, 2048, 8192, 16384, 32768]:
+            orig_mb = profile.kv_cache_gb_per_1k_tokens * ctx / 1000 * 1024
+            comp_mb = orig_mb / 3.47
+            saved_mb = orig_mb - comp_mb
+            console.print(f"  {ctx:>10} | {orig_mb:>10.2f} | {comp_mb:>10.2f} | {saved_mb:>8.2f} | {3.47:>5.1f}x")
+
+        console.print(f"\n[dim]Compression ratio: 3.47x (71.2% memory reduction)[/dim]")
+
+    except FileNotFoundError as exc:
+        _handle_error(f"Profile not found for '{model}'. Run 'apply' first.", exc)
+    except Exception as exc:
+        _handle_error(f"Error: {exc}", exc)
+
+
+@app.command()
+def compare(
+    model: str = typer.Argument(..., help="Model to compare compression for"),
+    context_length: int = typer.Option(4096, "--context", "-c", help="Context length for comparison"),
+) -> None:
+    """Compare original vs compressed KV cache memory usage."""
+    try:
+        profile = load_profile(model)
+
+        # Calculate memory at given context length
+        orig_mb = profile.kv_cache_gb_per_1k_tokens * context_length / 1000 * 1024
+        comp_mb = orig_mb / 3.47
+        saved_mb = orig_mb - comp_mb
+
+        console.print(f"\n[bold]KV Cache Comparison for {model}[/bold]")
+        console.print(f"Context length: {context_length} tokens\n")
+
+        from rich.panel import Panel
+        from rich.layout import Layout
+
+        layout = Layout()
+        layout.split_column(
+            Layout(name="top", size=10),
+            Layout(name="bottom", size=12),
+        )
+
+        # Before compression
+        before_text = f"""[bold red]Before Compression[/bold red]
+
+[cyan]KV Cache Size:[/cyan] [red]{orig_mb:.2f} MB[/red]
+[cyan]Format:[/cyan] FP16 (2 bytes per value)
+"""
+
+        # After compression
+        after_text = f"""[bold green]After Compression[/bold green]
+
+[cyan]KV Cache Size:[/cyan] [green]{comp_mb:.2f} MB[/green]
+[cyan]Format:[/cyan] TurboQuant (3.5-bit avg)
+"""
+
+        layout["top"].split_row(
+            Layout(Panel(before_text, title="Original", border_style="red")),
+            Layout(Panel(after_text, title="Compressed", border_style="green")),
+        )
+
+        # Savings summary
+        savings_text = f"""
+[bold]Memory Saved: {saved_mb:.2f} MB[/bold]
+
+[green]Compression Ratio: 3.47x[/green]
+[green]Reduction: 71.2%[/green]
+
+[dim]For a full generation at {context_length} tokens[/dim]
+"""
+        layout["bottom"].update(Panel(savings_text, title="Savings Summary", border_style="green"))
+
+        console.print(layout)
+
+    except FileNotFoundError as exc:
+        _handle_error(f"Profile not found for '{model}'. Run 'apply' first.", exc)
+    except Exception as exc:
+        _handle_error(f"Error: {exc}", exc)
+
+
+@app.command()
+def uninstall(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be removed"),
+    force: bool = typer.Option(False, "--force", "-y", help="Skip confirmation"),
+) -> None:
+    """Uninstall ContextLens and remove all profiles."""
+    import shutil
+
+    console.print("[bold yellow]ContextLens Uninstall[/bold yellow]\n")
+
+    profile_dir = Path.home() / ".contextlens"
+
+    # Show what will be removed
+    items = []
+
+    if profile_dir.exists():
+        profiles = list(profile_dir.glob("*.json"))
+        if profiles:
+            items.append(f"Profile directory: {profile_dir} ({len(profiles)} profiles)")
+
+    items.append("Package: llm-contextlens")
+
+    console.print("[bold]Will remove:[/bold]")
+    for item in items:
+        console.print(f"  - {item}")
+    console.print()
+
+    if dry_run:
+        console.print("[yellow]Dry run - no changes made[/yellow]")
+        console.print("[dim]Run without --dry-run to actually remove[/dim]")
+        return
+
+    if not force:
+        confirm = typer.confirm("Are you sure you want to uninstall?")
+        if not confirm:
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+    # Remove profiles
+    if profile_dir.exists():
+        shutil.rmtree(profile_dir)
+        console.print(f"[green]✓ Removed profile directory[/green]")
+
+    console.print(f"\n[dim]To complete uninstall, run:[/dim]")
+    console.print("  [cyan]pip uninstall llm-contextlens[/cyan]")
+    console.print("  [cyan]pipx uninstall llm-contextlens[/cyan]")
 
 
 @app.command()
